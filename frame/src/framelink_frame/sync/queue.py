@@ -40,17 +40,37 @@ def calculate_score(
     view_count: int,
     last_seen_at: datetime | None,
     now: datetime,
+    seasonal_multiplier: float = 1.0,
 ) -> float:
     """
     Higher score = more likely to be shown next.
     Never-shown photos have the highest possible score.
     Photos shown long ago rank above recently shown ones.
+    seasonal_multiplier (0..1) down-weights out-of-season photos.
     """
     if last_seen_at is None:
         hours_since = 1_000_000.0
     else:
         hours_since = max(0.0, (now - last_seen_at).total_seconds() / 3600)
-    return hours_since / (1 + view_count) ** 0.6
+    return (hours_since / (1 + view_count) ** 0.6) * seasonal_multiplier
+
+
+def _seasonal_multiplier(photo_doy: int, now_doy: int, cfg) -> float:
+    """
+    Soft seasonal score multiplier based on day-of-year distance.
+    Photos within the season window get 1.0; photos outside get (1-weight).
+    A smoothstep transition zone (transition_days wide) avoids hard cuts.
+    """
+    half_window = cfg.window_months * 30 / 2
+    dist = abs(photo_doy - now_doy)
+    dist = min(dist, 365 - dist)  # wrap around year boundary
+    if dist <= half_window:
+        return 1.0
+    if dist >= half_window + cfg.transition_days:
+        return 1.0 - cfg.weight
+    t = (dist - half_window) / cfg.transition_days  # 0..1
+    smooth = t * t * (3 - 2 * t)                    # smoothstep
+    return 1.0 - cfg.weight * smooth
 
 
 def needed_cache_size(interval_minutes: float) -> int:
@@ -82,6 +102,7 @@ def build_queue(
     pool = list(photos.values())
     pool = _apply_filters(pool, config.filters)
     pool = _apply_exclusions(pool, set(config.filters.excluded_photos))
+    pool = _apply_album_exclusions(pool, set(config.filters.excluded_albums))
 
     if not pool:
         log.warning("Queue builder: pool is empty after filters")
@@ -91,11 +112,18 @@ def build_queue(
     # pairing, then truncate to max_slots after building slots.
     if max_slots is not None and len(pool) > max_slots * 2:
         now = datetime.now(timezone.utc)
+        now_doy = now.timetuple().tm_yday
         vh = view_history or {}
+        sc = config.filters.date_range.seasonal
+        seasonal_enabled = (config.filters.date_range.mode == "seasonal" and sc.enabled)
         weights = []
         for p in pool:
             vc, last_seen = vh.get(p.guid, (0, None))
-            weights.append(calculate_score(vc, last_seen, now))
+            s_mult = 1.0
+            if seasonal_enabled and p.captured_at:
+                photo_doy = p.captured_at.timetuple().tm_yday
+                s_mult = _seasonal_multiplier(photo_doy, now_doy, sc)
+            weights.append(calculate_score(vc, last_seen, now, s_mult))
 
         # Sample max_slots * 2 distinct photos (enough for pairing overhead)
         sample_n = min(max_slots * 2, len(pool))
@@ -155,34 +183,22 @@ def _apply_filters(pool: list[PhotoMeta], filters: FiltersConfig) -> list[PhotoM
         cutoff = now - timedelta(days=years * 365)
         pool = [p for p in pool if p.captured_at and p.captured_at >= cutoff]
 
-    elif mode == "seasonal":
-        sc = filters.date_range.seasonal
-        if sc.enabled:
-            pool = _seasonal_filter(pool, now, sc.window_months, sc.weight)
+    # "seasonal" mode: no hard filter — weighting is handled via score multiplier
+    # in the sampling step above. Photos without a date always pass through.
 
     return pool
-
-
-def _seasonal_filter(
-    pool: list[PhotoMeta], now: datetime, window: int, weight: float
-) -> list[PhotoMeta]:
-    result = []
-    for p in pool:
-        if not p.captured_at:
-            result.append(p)
-            continue
-        diff = abs(p.captured_at.month - now.month)
-        diff = min(diff, 12 - diff)
-        in_season = diff <= window
-        if in_season or random.random() > weight:
-            result.append(p)
-    return result
 
 
 def _apply_exclusions(pool: list[PhotoMeta], excluded: set[str]) -> list[PhotoMeta]:
     if not excluded:
         return pool
     return [p for p in pool if p.guid not in excluded]
+
+
+def _apply_album_exclusions(pool: list[PhotoMeta], excluded_tokens: set[str]) -> list[PhotoMeta]:
+    if not excluded_tokens:
+        return pool
+    return [p for p in pool if p.token not in excluded_tokens]
 
 
 # ---------------------------------------------------------------------------

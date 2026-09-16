@@ -1,7 +1,7 @@
 # Framelink frame config — copy to /etc/framelink/config.yaml
 
 registry:
-  url: "https://bilderrahmen-api.koellmann.dev"
+  url: "https://<your-registry-host>"
   api_key: "changeme"
 
 overlay:
@@ -38,15 +38,15 @@ filters:
     recent_years: null
     seasonal:
       enabled: false
-      weight: 0.7
-      window_months: 2
-  excluded_photos: []
+      weight: 0.7       # how much out-of-season photos are down-weighted (0-1)
+      window_months: 2  # half-window around today's day-of-year (in months)
+      transition_days: 5  # soft transition zone at window edges
+  excluded_photos: []   # individual photo GUIDs to never show
+  excluded_albums: []   # album tokens to disable entirely
 
 sync:
   auto: true
-  interval_minutes: null  # null = auto-calculated from schedule + rotation
-  buffer_factor: 2.0
-  max_cached_photos: 200
+  interval_minutes: null  # null = auto-calculated (120 min)
   cache_dir: /var/lib/framelink/cache
 
 geocoding:

@@ -141,6 +141,8 @@ def api_exclude():
 @app.route("/api/albums")
 def api_albums():
     meta = load_metadata()
+    cfg = _current_config()
+    excluded = set(cfg.filters.excluded_albums)
     by_token: dict[str, dict] = {}
     for photo in meta.values():
         t = photo.token
@@ -150,6 +152,7 @@ def api_albums():
                 "album_name": photo.album_name,
                 "owner": photo.display_owner,
                 "photo_count": 0,
+                "enabled": t not in excluded,
             }
         by_token[t]["photo_count"] += 1
     return jsonify(list(by_token.values()))
@@ -215,8 +218,13 @@ def api_filters():
     if request.method == "GET":
         return jsonify(cfg.filters.model_dump())
     body = request.get_json(force=True)
+    update: dict = {}
     if "excluded_photos" in body:
-        updated = cfg.filters.model_copy(update={"excluded_photos": body["excluded_photos"]})
+        update["excluded_photos"] = body["excluded_photos"]
+    if "excluded_albums" in body:
+        update["excluded_albums"] = body["excluded_albums"]
+    if update:
+        updated = cfg.filters.model_copy(update=update)
         cfg = cfg.model_copy(update={"filters": updated})
         _save_config(cfg)
     return jsonify({"ok": True})

@@ -766,25 +766,40 @@ async function triggerSync() {
 }
 
 // ── Albums ───────────────────────────────────────────────────────────
+let _albumData = [];
+
 async function loadAlbums() {
-  const albums = await api("/api/albums");
+  _albumData = await api("/api/albums") || [];
   const el = document.getElementById("albumList");
-  if (!albums.length) {
+  if (!_albumData.length) {
     el.innerHTML = '<div style="color:var(--text-3);padding:12px 0">Keine Alben registriert</div>';
     return;
   }
-  el.innerHTML = albums.map(a => `
+  el.innerHTML = _albumData.map(a => `
     <div class="album-row">
       <div class="album-icon">
         <svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
       </div>
       <div style="flex:1;min-width:0">
         <div class="album-name">${a.album_name || "Unbekanntes Album"}</div>
-        <div class="album-meta">${a.owner}</div>
+        <div class="album-meta">${a.owner} · ${a.photo_count} Fotos</div>
       </div>
-      <div class="album-count">${a.photo_count} Fotos</div>
+      <label class="toggle" style="flex-shrink:0">
+        <input type="checkbox" ${a.enabled ? "checked" : ""} onchange="toggleAlbum('${a.token}', this.checked)">
+        <span class="toggle-track"></span>
+      </label>
     </div>
   `).join("");
+}
+
+async function toggleAlbum(token, enabled) {
+  const excluded = _albumData
+    .filter(a => a.token === token ? !enabled : !a.enabled)
+    .map(a => a.token);
+  // update local state
+  const album = _albumData.find(a => a.token === token);
+  if (album) album.enabled = enabled;
+  await api("/api/config/filters", "POST", { excluded_albums: excluded });
 }
 
 // ── Display config ───────────────────────────────────────────────────

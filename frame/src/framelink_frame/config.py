@@ -75,13 +75,15 @@ class DateFilterConfig(BaseModel):
 
 class SeasonalConfig(BaseModel):
     enabled: bool = False
-    weight: float = 0.7      # probability boost for in-season photos
-    window_months: int = 2   # ±months around today's month
+    weight: float = 0.7       # how much out-of-season photos are down-weighted
+    window_months: int = 2    # half-window around today's day-of-year (in months)
+    transition_days: int = 5  # soft transition zone at window edges
 
 
 class FiltersConfig(BaseModel):
     date_range: DateFilterConfig = Field(default_factory=DateFilterConfig)
-    excluded_photos: list[str] = Field(default_factory=list)  # iCloud photo GUIDs
+    excluded_photos: list[str] = Field(default_factory=list)   # iCloud photo GUIDs
+    excluded_albums: list[str] = Field(default_factory=list)   # iCloud album tokens
 
 
 class SyncConfig(BaseModel):

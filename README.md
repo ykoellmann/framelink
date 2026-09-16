@@ -1,272 +1,253 @@
 # Framelink
 
-Raspberry Pi Bilderrahmen für die Familie. Ein Fernseher zeigt automatisch Fotos aus iCloud-Alben aller Familienmitglieder — ohne Apple-Account auf dem Gerät, ohne dauerhaften Cloudflare-Tunnel auf dem Frame-Pi.
+A self-hosted Raspberry Pi photo frame that pulls from iCloud Shared Albums — no Apple account on the device, no persistent cloud tunnel on the frame, no proprietary apps.
 
 ```
-iPhone (Familie)
-    │  iOS Shortcut → Album-URL teilen
+iPhone (family)
+    │  share iCloud album → iOS Shortcut → Registry API
     ▼
-Homelab Pi 5  ── registry/  (FastAPI + SQLite/PostgreSQL, Docker)
+Homelab server  ── registry/  (FastAPI + SQLite, Docker)
     │  GET /api/albums
     ▼
-Frame Pi Zero 2W  ── frame/  (sync + pygame + Flask PWA)
+Pi Zero 2W  ── frame/  (sync + pygame display + Flask web UI)
     │
     ▼
-HDMI-TV in der Küche
+HDMI TV / monitor
 ```
 
 ---
 
-## Architektur
+## How it works
 
-### Tier 1 — Registry (Homelab Pi 5)
+Family members create iCloud Shared Albums, enable the **Public Website** option (no Apple ID required to view), and share the link via a one-tap iOS Shortcut. The registry stores album tokens; the frame Pi fetches photo metadata directly from iCloud, downloads only the photos it needs for the current rotation window, and displays them with fade transitions and a metadata overlay.
 
-FastAPI-Service in Docker. Speichert iCloud Shared-Album-Tokens und ihre Metadaten (Album-Name, Ersteller, Fotoanzahl). Kein Apple-Login, keine Credentials — nur die öffentlichen Album-URLs.
+Key design choices:
+- **No Apple credentials on the Pi** — uses public iCloud shared album URLs only
+- **Stateless anti-repetition** — SQLite view history + time-decay scoring, no resets needed
+- **Portrait pairing** — two portrait photos shown side-by-side as a ~16:9 composition
+- **Seasonal weighting** — photos from the same time of year are shown more often, with soft 5-day transitions at month boundaries
 
-**Datenbank:** konfigurierbar via `FRAMELINK_DATABASE_URL`:
-- `sqlite:///./data/framelink.db` — Standard, zero-Setup
-- `postgresql://user:pw@localhost/framelink` — bestehende PostgreSQL-Instanz
+---
+
+## Architecture
+
+### Tier 1 — Registry (home server)
+
+FastAPI service in Docker. Stores iCloud Shared Album tokens and their metadata (album name, owner, photo count). No Apple login — just HTTP requests with the public album token.
+
+**Database:** configurable via `FRAMELINK_DATABASE_URL`:
+- `sqlite:///./data/framelink.db` — default, zero setup
+- `postgresql://user:pw@localhost/framelink` — existing PostgreSQL instance
 
 ### Tier 2 — Frame (Pi Zero 2W)
 
-Vier systemd-Komponenten:
+Four systemd components:
 
-| Service | Was er tut |
+| Service | What it does |
 |---|---|
-| `framelink-sync.timer` | Holt Album-Tokens von der Registry, fetcht Metadaten von iCloud, baut Queue, lädt nur benötigte Bilder |
-| `framelink-display` | pygame auf KMS/DRM-Framebuffer (kein X11), Fade-Transitions, Portrait-Pairing, Metadata-Overlay |
-| `framelink-webui` | Flask PWA auf Port 5000, im LAN erreichbar als `http://bilderrahmen.local:5000` |
-| CEC (cron) | TV per `cec-client` ein-/ausschalten nach Zeitplan |
+| `framelink-sync.timer` | Fetches album tokens from the registry, syncs photo metadata from iCloud, builds the display queue, downloads only needed images |
+| `framelink-display` | pygame on KMS/DRM framebuffer (no X11), fade transitions, portrait pairing, metadata overlay |
+| `framelink-webui` | Flask PWA on port 5000, LAN-accessible at `http://frame.local:5000` |
 
 ---
 
-## Voraussetzungen
+## Requirements
 
-### Registry (Homelab Pi 5)
+### Registry (home server)
 - Docker + Docker Compose
-- Optional: laufende PostgreSQL-Instanz
 
 ### Frame (Pi Zero 2W)
-- Raspberry Pi OS Lite (64-bit, Bookworm)
+- Raspberry Pi OS Lite 64-bit (Bookworm)
 - Python 3.11+
-- `libsdl2-dev`, `libsdl2-image-dev` (für pygame ohne X11)
-- `cec-utils` (für TV-Steuerung, optional)
-- `avahi-daemon` (für `bilderrahmen.local`)
+- `libsdl2-dev` (pygame without X11)
+- `avahi-daemon` (for `frame.local` mDNS)
 
 ---
 
 ## Setup
 
-### 1. Repository klonen
+### 1. Clone the repository
 
 ```bash
-git clone https://github.com/koellmann/framelink
+git clone https://github.com/yourusername/framelink
 cd framelink
 ```
 
-### 2. Registry deployen (Homelab Pi)
+### 2. Deploy the registry
 
 ```bash
 cd registry
 cp .env.example .env
-# .env editieren: FRAMELINK_API_KEY setzen
-# Optional: FRAMELINK_DATABASE_URL auf PostgreSQL zeigen
-
+# Edit .env: set FRAMELINK_API_KEY to a random secret
 docker compose up -d
 ```
 
-Prüfen:
+Expose the registry via a reverse proxy or Cloudflare Tunnel so the frame Pi can reach it at `https://<your-registry-host>`.
+
+Verify:
 ```bash
-curl http://localhost:8000/health
+curl https://<your-registry-host>/health
 # {"status":"ok"}
 ```
 
-Cloudflare Tunnel (oder eigenes Reverse Proxy) auf Port 8000 einrichten,
-sodass der Frame-Pi die Registry unter `https://bilderrahmen-api.koellmann.dev` erreicht.
-
-### 3. Frame-Pi einrichten
-
-Das Setup-Skript erledigt alles:
+### 3. Set up the frame Pi
 
 ```bash
-# Auf dem Pi Zero 2W als root:
-curl -sSf https://raw.githubusercontent.com/koellmann/framelink/main/frame/install.sh | bash
-
-# Oder lokal (nach git clone):
+# On the Pi Zero 2W as root:
 sudo bash frame/install.sh
 ```
 
-Was das Skript macht: siehe [frame/install.sh](frame/install.sh).
-
-Nach dem Setup `config.yaml` befüllen:
-
+Edit the config:
 ```bash
 sudo nano /etc/framelink/config.yaml
 ```
 
-Dann Services starten:
+Minimal config:
+```yaml
+registry:
+  url: "https://<your-registry-host>"
+  api_key: "your-secret-key"
+```
 
+Start services:
 ```bash
 sudo systemctl enable --now framelink-display framelink-webui framelink-sync.timer
 ```
 
-### 4. iOS Shortcut einrichten
+### 4. Add albums
 
-1. Shortcut erstellen: **URL aus Share Sheet empfangen → HTTP-POST**
-   - URL: `https://bilderrahmen-api.koellmann.dev/api/albums`
-   - Header: `X-API-Key: <dein-key>`
-   - Body (JSON): `{"url": "<Shortcut Input>"}`
-2. Shortcut per iMessage an alle Familienmitglieder teilen
-
-### 5. Erstes Album hinzufügen
-
-> **Wichtig:** Es gibt zwei verschiedene Sharing-Modi in iCloud. Framelink benötigt den
-> **"Öffentliche Website"**-Link, nicht den normalen Einladungslink.
-
-| Link-Typ | URL-Format | Framelink-kompatibel? |
-|---|---|---|
-| Öffentliche Website | `www.icloud.com/photos/#A…` oder `#B…` | **Ja** |
-| Einladungslink (Share-Button) | `share.icloud.com/photos/…` | Nein — erfordert Apple-ID-Login |
-
-**Schritt für Schritt:**
-1. iOS Fotos-App → geteiltes Album öffnen
-2. Oben rechts auf **Personen** tippen
-3. Ganz unten: **"Öffentliche Website"** → einschalten
-4. Unter "Öffentliche Website" auf **"Link teilen"** tippen
-5. Diesen `www.icloud.com/photos/#...`-Link an den Framelink-Shortcut weitergeben
-
-Der Frame holt sich beim nächsten Sync-Intervall automatisch die Bilder.
+See **[docs/sharing-guide.md](docs/sharing-guide.md)** for step-by-step instructions (iOS and Android).
 
 ---
 
-## Konfiguration
+## Configuration
 
-### Registry
+Full example: [frame/config.yaml.example](frame/config.yaml.example)
 
-Umgebungsvariablen (`.env` oder `docker-compose.yml`):
+### Registry (`registry/.env`)
 
-| Variable | Default | Beschreibung |
+| Variable | Default | Description |
 |---|---|---|
-| `FRAMELINK_API_KEY` | *(Pflicht)* | Shared Secret für `X-API-Key` Header |
-| `FRAMELINK_DATABASE_URL` | `sqlite:///./data/framelink.db` | SQLite oder PostgreSQL |
-| `FRAMELINK_METADATA_REFRESH_INTERVAL_MINUTES` | `60` | Wie oft Metadaten von iCloud neu geladen werden |
+| `FRAMELINK_API_KEY` | *(required)* | Shared secret for `X-API-Key` header |
+| `FRAMELINK_DATABASE_URL` | `sqlite:///./data/framelink.db` | SQLite or PostgreSQL connection string |
+| `FRAMELINK_METADATA_REFRESH_INTERVAL_MINUTES` | `60` | How often to refresh album metadata from iCloud |
 
-### Frame
-
-`/etc/framelink/config.yaml` — vollständiges Beispiel in [frame/config.yaml.example](frame/config.yaml.example).
-
-Wichtigste Felder:
+### Frame (`/etc/framelink/config.yaml`)
 
 ```yaml
-registry:
-  url: "https://bilderrahmen-api.koellmann.dev"
-  api_key: "dein-key"
-
 rotation:
-  interval_minutes: 30   # Wie lange ein Bild/Paar sichtbar bleibt
+  interval_minutes: 30   # how long each photo/pair is shown
 
 schedule:
   active_periods:
     - start: "08:00"
-      end: "22:00"
+      end: "22:00"       # screen turns off outside this window
 
-sync:
-  max_cached_photos: 200
+filters:
+  date_range:
+    mode: seasonal       # all | recent | seasonal
+    seasonal:
+      enabled: true
+      weight: 0.7        # out-of-season photos shown at 30% probability
+      window_months: 2   # ±2 months around today's day-of-year
+      transition_days: 5 # soft transition at window edges
+
+overlay:
+  enabled: true
+  position: bottom       # bottom | top
+  fields:
+    album_name: true
+    owner: true
+    date: true
 ```
 
 ---
 
-## Web-UI
+## Web UI
 
-Erreichbar im LAN: `http://bilderrahmen.local:5000`
+LAN access: `http://frame.local:5000`
 
-Auf dem iPhone als App installieren: Safari → Teilen → "Zum Home-Bildschirm".
+Install as an app on iPhone/Android: browser → Share → "Add to Home Screen".
 
-| Tab | Funktion |
+| Tab | Function |
 |---|---|
-| Remote | Nächstes Foto, Pause, aktuelles Foto dauerhaft ausblenden |
-| Anzeige | Overlay-Felder, Wechselintervall, Übergang |
-| Alben | Übersicht aller registrierten Alben |
-| Zeitplan | Aktive Zeiten (TV-Steuerung per CEC) |
-| System | Cache-Status, manueller Sync |
+| Remote | Next photo, pause, permanently hide current photo |
+| Display | Overlay fields, rotation interval, transition style |
+| Albums | Enable/disable individual albums |
+| Schedule | Active time periods |
+| System | Cache status, manual sync trigger |
 
 ---
 
-## IPC — Display ↔ Sync ↔ Web-UI
+## IPC — Display ↔ Sync ↔ Web UI
 
-Alle drei Prozesse kommunizieren über `/tmp/frame-cmd` (atomare Textdatei):
+All three processes communicate via `/tmp/frame-cmd` (atomic text file):
 
-| Kommando | Bedeutung |
+| Command | Meaning |
 |---|---|
-| `reload-queue` | Queue neu laden (nach Sync) |
-| `next` | Sofort nächsten Slot zeigen |
-| `pause` | Pause umschalten |
-| `exclude:<guid>` | Foto dauerhaft aus Queue entfernen |
+| `reload-queue` | Reload queue from disk (after sync) |
+| `reload-config` | Reload config.yaml (propagates immediately to display) |
+| `next` | Skip to next slot immediately |
+| `pause` | Toggle pause |
+| `exclude:<guid>` | Permanently hide a photo |
 
 ---
 
-## iCloud API
+## iCloud Shared Album API
 
-Framelink nutzt die öffentliche iCloud Shared Album API (reverse-engineered, kein offizieller Apple-Support):
+Framelink uses the public iCloud Shared Album API (reverse-engineered, no official Apple support):
 
-1. Token aus URL extrahieren (`#`-Fragment)
-2. Cluster-ID aus Token-Präfix ableiten
+1. Extract token from URL fragment (`#…`)
+2. Derive cluster ID from token prefix
 3. `POST https://p{cluster}-sharedstreams.icloud.com/{token}/sharedstreams/webstream`
-4. Bei HTTP 330: Redirect auf neuen Host, erneut POST
-5. Download-URLs per `POST .../webasseturls`
+4. On HTTP 330: follow redirect, retry POST
+5. Download URLs via `POST …/webasseturls`
 
-Kein Apple-Account, kein Login, kein 2FA.
+No Apple account, no login, no 2FA.
+
+> **Note:** Apple strips GPS coordinates from Shared Album photos before distribution. Location metadata is not available.
 
 ---
 
-## Entwicklung
+## Development
 
 ```bash
-# Registry lokal starten
-cd registry
-python -m venv .venv && source .venv/bin/activate
+# Registry
+cd registry && python -m venv .venv && source .venv/bin/activate
 pip install -e ".[postgres]"
 FRAMELINK_API_KEY=dev uvicorn framelink_registry.main:app --reload
 # → http://localhost:8000/docs
 
-# Frame-Sync lokal testen (braucht laufende Registry)
-cd frame
-python -m venv .venv && source .venv/bin/activate
-pip install -e ".[webui]"
-FRAMELINK_CONFIG=frame/config.yaml.example framelink-sync
+# Frame display (windowed, resizable)
+cd frame && source .venv/bin/activate
+FRAMELINK_CONFIG=config.yaml.example FRAMELINK_WINDOWED=1 python -m framelink_frame.display.main
 
-# Web-UI lokal
-FRAMELINK_CONFIG=frame/config.yaml.example framelink-webui
-# → http://localhost:5000
-```
-
-### Datenbank-Migrationen
-
-```bash
-cd registry
-# Neue Migration generieren (nach Model-Änderungen):
-alembic revision --autogenerate -m "beschreibung"
-# Migrieren:
-alembic upgrade head
+# Web UI
+FRAMELINK_CONFIG=config.yaml.example python -m framelink_frame.webui.main
 ```
 
 ---
 
 ## Hardware
 
-| Teil | Bezugsquelle | Preis ca. |
-|---|---|---|
-| Raspberry Pi Zero 2 W | raspberrypi.com | 20 € |
-| MicroSD 16 GB (A1) | – | 8 € |
-| USB-C Netzteil 3A | – | 10 € |
-| Mini-HDMI → HDMI Adapter | – | 3 € |
-| **Gesamt** | | **~41 €** |
+| Part | Approx. cost |
+|---|---|
+| Raspberry Pi Zero 2W | €20 |
+| MicroSD 16 GB (A1) | €8 |
+| USB-C power supply 3A | €10 |
+| Mini-HDMI → HDMI adapter | €3 |
+| **Total** | **~€41** |
 
 ---
 
-## Bekannte Einschränkungen
+## Known limitations
 
-- Die iCloud Shared Album API ist nicht offiziell dokumentiert und kann sich ohne Vorwarnung ändern.
-- `cec-utils` funktioniert nur, wenn der TV CEC unterstützt und aktiviert hat.
-- pygame auf KMS/DRM (ohne X11) muss auf dem Pi Zero 2 W validiert werden — Fallback: `fbi` mit vorgerenderten Bildern.
-- Nominatim (Reverse-Geocoding) hat ein Rate-Limit von 1 req/s; bei vielen neuen Fotos auf einmal dauert die erste Sync etwas länger.
+- The iCloud Shared Album API is not officially documented and may change without notice.
+- pygame on KMS/DRM (without X11) needs validation on Pi Zero 2W — fallback: `fbi` with pre-rendered images.
+- GPS/location data is stripped by Apple when photos are added to Shared Albums and cannot be recovered.
+
+---
+
+## License
+
+MIT
