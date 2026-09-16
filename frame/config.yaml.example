@@ -1,0 +1,54 @@
+# Framelink frame config — copy to /etc/framelink/config.yaml
+
+registry:
+  url: "https://bilderrahmen-api.koellmann.dev"
+  api_key: "changeme"
+
+overlay:
+  enabled: true
+  fields:
+    album_name: true
+    owner: true
+    date: true
+    location: true
+  position: bottom
+  opacity: 0.6
+
+transition:
+  style: fade        # fade | cut
+  duration_ms: 1000
+
+rotation:
+  interval_minutes: 30
+  order: random      # random | chronological | album_grouped
+
+layout:
+  portrait_pairing: true
+  portrait_pair_preference: same_album_same_day  # same_album_same_day | same_album | any
+  fill_mode: blurred  # blurred | black
+
+schedule:
+  active_periods:
+    - start: "08:00"
+      end: "22:00"
+
+filters:
+  date_range:
+    mode: all          # all | recent | seasonal
+    recent_years: null
+    seasonal:
+      enabled: false
+      weight: 0.7
+      window_months: 2
+  excluded_photos: []
+
+sync:
+  auto: true
+  interval_minutes: null  # null = auto-calculated from schedule + rotation
+  buffer_factor: 2.0
+  max_cached_photos: 200
+  cache_dir: /var/lib/framelink/cache
+
+geocoding:
+  enabled: true
+  user_agent: "framelink/0.1"

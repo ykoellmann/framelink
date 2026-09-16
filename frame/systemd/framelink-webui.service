@@ -1,0 +1,17 @@
+[Unit]
+Description=Framelink config web UI
+After=local-fs.target
+
+[Service]
+Type=simple
+User=framelink
+EnvironmentFile=-/etc/framelink/env
+ExecStart=/opt/framelink/venv/bin/framelink-webui
+Restart=on-failure
+RestartSec=5s
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=framelink-webui
+
+[Install]
+WantedBy=multi-user.target

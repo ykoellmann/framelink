@@ -1,0 +1,35 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "framelink-registry"
+version = "0.1.0"
+description = "Album registry for the Framelink photo frame system"
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi>=0.111",
+    "uvicorn[standard]>=0.29",
+    "sqlalchemy[asyncio]>=2.0",
+    "alembic>=1.13",
+    "pydantic-settings>=2.2",
+    "aiosqlite>=0.20",
+    "httpx>=0.27",
+    "apscheduler>=3.10",
+]
+
+[project.optional-dependencies]
+postgres = [
+    "psycopg[async]>=3.1",
+]
+dev = [
+    "pytest>=8",
+    "pytest-asyncio>=0.23",
+    "httpx>=0.27",  # TestClient
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/framelink_registry"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"

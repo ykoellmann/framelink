@@ -1,0 +1,14 @@
+[Unit]
+Description=Framelink photo sync timer
+Requires=framelink-sync.service
+
+[Timer]
+# Run once at boot (after a short delay for network)
+OnBootSec=60s
+# Then every N minutes — override with FRAMELINK_SYNC_INTERVAL_MINUTES in
+# /etc/framelink/env or set sync.interval_minutes in config.yaml.
+# Default matches config default (auto-calculated ≈ 60 min).
+OnUnitActiveSec=60min
+
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,863 @@
+<title>Framelink</title>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="/manifest.json">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap">
+
+<style>
+/* ── Tokens ─────────────────────────────────────────────────────────── */
+:root {
+  --bg:           #faf8f5;
+  --bg-card:      #ffffff;
+  --bg-sunken:    #f2ede6;
+  --bg-tint:      #fdf0e6;
+  --border:       #e8e0d5;
+  --border-soft:  #f0e8df;
+
+  --accent:       #f07840;
+  --accent-dim:   #b85a2a;
+  --accent-tint:  #fde8d8;
+  --accent-rail:  #f07840;
+
+  --text:         #1c1712;
+  --text-2:       #6b5f55;
+  --text-3:       #9a8f85;
+
+  --success:      #2e9462;
+  --danger:       #c44b3a;
+  --danger-tint:  #fce8e6;
+
+  --tab-h:        62px;
+  --safe-b:       env(safe-area-inset-bottom, 0px);
+  --radius-sm:    8px;
+  --radius:       12px;
+  --radius-lg:    16px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg:           #141210;
+    --bg-card:      #1e1b17;
+    --bg-sunken:    #181510;
+    --bg-tint:      #231e18;
+    --border:       #2e2820;
+    --border-soft:  #252018;
+    --accent:       #f07840;
+    --accent-dim:   #ffa070;
+    --accent-tint:  #2e1e12;
+    --text:         #f0ece6;
+    --text-2:       #b0a090;
+    --text-3:       #706050;
+    --success:      #3ab070;
+    --danger:       #e05545;
+    --danger-tint:  #2e1510;
+  }
+}
+:root[data-theme="dark"] {
+  --bg:           #141210;
+  --bg-card:      #1e1b17;
+  --bg-sunken:    #181510;
+  --bg-tint:      #231e18;
+  --border:       #2e2820;
+  --border-soft:  #252018;
+  --accent:       #f07840;
+  --accent-dim:   #ffa070;
+  --accent-tint:  #2e1e12;
+  --text:         #f0ece6;
+  --text-2:       #b0a090;
+  --text-3:       #706050;
+  --success:      #3ab070;
+  --danger:       #e05545;
+  --danger-tint:  #2e1510;
+}
+
+/* ── Reset ──────────────────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: "Plus Jakarta Sans", system-ui, sans-serif;
+  font-size: 15px;
+  line-height: 1.5;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ── Header ─────────────────────────────────────────────────────────── */
+.app-header {
+  background: var(--bg-card);
+  border-bottom: 1px solid var(--border);
+  padding: 14px 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  position: sticky;
+  top: 0;
+  z-index: 50;
+}
+.app-header h1 {
+  font-size: 1.05rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: var(--text);
+}
+.status-pill {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-3);
+  background: var(--bg-sunken);
+  padding: 4px 10px;
+  border-radius: 20px;
+}
+.status-dot {
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  background: var(--text-3);
+  flex-shrink: 0;
+  transition: background .3s;
+}
+.status-dot.online { background: var(--success); }
+
+/* ── Content ────────────────────────────────────────────────────────── */
+main {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px 16px calc(var(--tab-h) + var(--safe-b) + 16px);
+  max-width: 540px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+/* ── Tabs ────────────────────────────────────────────────────────────── */
+.tab { display: none; }
+.tab.active { display: block; }
+
+/* ── Nav ─────────────────────────────────────────────────────────────── */
+.app-nav {
+  background: var(--bg-card);
+  border-top: 1px solid var(--border);
+  display: flex;
+  position: fixed;
+  bottom: 0; left: 0; right: 0;
+  padding-bottom: var(--safe-b);
+  z-index: 50;
+}
+.nav-btn {
+  flex: 1;
+  background: none;
+  border: none;
+  color: var(--text-3);
+  padding: 10px 4px 8px;
+  font-size: 0.68rem;
+  font-family: inherit;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  transition: color .15s;
+  text-transform: uppercase;
+}
+.nav-btn svg {
+  width: 20px; height: 20px;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 1.75;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  flex-shrink: 0;
+}
+.nav-btn.active { color: var(--accent); }
+
+/* ── Section label ───────────────────────────────────────────────────── */
+.section-label {
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-3);
+  margin-bottom: 10px;
+}
+
+/* ── Cards ───────────────────────────────────────────────────────────── */
+.card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  margin-bottom: 12px;
+  overflow: hidden;
+}
+.card-body { padding: 16px; }
+
+/* ── Now Playing ─────────────────────────────────────────────────────── */
+.now-playing {
+  border-left: 3px solid var(--accent-rail);
+  border-radius: 0 var(--radius) var(--radius) 0;
+}
+.np-label {
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin-bottom: 6px;
+}
+.np-title {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.np-meta {
+  font-size: 0.8rem;
+  color: var(--text-2);
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.np-meta span::before { content: "·"; margin-right: 8px; }
+.np-meta span:first-child::before { content: none; }
+
+/* ── Remote buttons ─────────────────────────────────────────────────── */
+.remote-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.remote-row.full { grid-template-columns: 1fr; }
+
+.ctrl-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 14px 16px;
+  border-radius: var(--radius-sm);
+  border: 1.5px solid var(--border);
+  background: var(--bg-card);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background .12s, border-color .12s, opacity .12s;
+}
+.ctrl-btn svg {
+  width: 18px; height: 18px;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  flex-shrink: 0;
+}
+.ctrl-btn:active { opacity: .7; }
+.ctrl-btn.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+.ctrl-btn.danger {
+  background: var(--danger-tint);
+  border-color: var(--danger);
+  color: var(--danger);
+}
+.ctrl-btn.active-state {
+  background: var(--accent-tint);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+/* ── Rows (settings) ─────────────────────────────────────────────────── */
+.row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border-soft);
+}
+.row:last-child { border-bottom: none; }
+.row-label { font-size: 0.9rem; font-weight: 500; color: var(--text); }
+.row-sub { font-size: 0.78rem; color: var(--text-3); margin-top: 1px; }
+
+/* ── Toggle ──────────────────────────────────────────────────────────── */
+.toggle { position: relative; width: 42px; height: 24px; flex-shrink: 0; }
+.toggle input { opacity: 0; width: 0; height: 0; position: absolute; }
+.toggle-track {
+  position: absolute; inset: 0;
+  background: var(--border);
+  border-radius: 24px;
+  cursor: pointer;
+  transition: background .2s;
+}
+.toggle-track::before {
+  content: "";
+  position: absolute;
+  width: 18px; height: 18px;
+  left: 3px; top: 3px;
+  background: #fff;
+  border-radius: 50%;
+  transition: transform .2s;
+  box-shadow: 0 1px 3px rgba(0,0,0,.15);
+}
+.toggle input:checked + .toggle-track { background: var(--accent); }
+.toggle input:checked + .toggle-track::before { transform: translateX(18px); }
+
+/* ── Stats ───────────────────────────────────────────────────────────── */
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  margin-bottom: 12px;
+}
+.stat-cell {
+  background: var(--bg-sunken);
+  border-radius: var(--radius-sm);
+  padding: 12px 10px;
+  text-align: center;
+}
+.stat-val {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+}
+.stat-lbl {
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-3);
+  margin-top: 2px;
+}
+
+/* ── Albums ──────────────────────────────────────────────────────────── */
+.album-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border-soft);
+}
+.album-row:last-child { border-bottom: none; }
+.album-icon {
+  width: 40px; height: 40px;
+  border-radius: var(--radius-sm);
+  background: var(--accent-tint);
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+}
+.album-icon svg {
+  width: 18px; height: 18px;
+  stroke: var(--accent);
+  fill: none;
+  stroke-width: 1.75;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.album-name { font-weight: 600; font-size: 0.9rem; }
+.album-meta { font-size: 0.78rem; color: var(--text-3); margin-top: 2px; }
+.album-count {
+  margin-left: auto;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--text-3);
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
+}
+
+/* ── Form controls ───────────────────────────────────────────────────── */
+.field { margin-bottom: 14px; }
+.field label {
+  display: block;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--text-2);
+  margin-bottom: 5px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+select, input[type="number"], input[type="time"] {
+  width: 100%;
+  background: var(--bg-sunken);
+  color: var(--text);
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 9px 12px;
+  font-family: inherit;
+  font-size: 0.9rem;
+  appearance: none;
+  -webkit-appearance: none;
+}
+select:focus, input:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+  border-color: var(--accent);
+}
+
+/* ── Buttons ─────────────────────────────────────────────────────────── */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 10px 18px;
+  border-radius: var(--radius-sm);
+  border: 1.5px solid transparent;
+  font-family: inherit;
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity .12s;
+}
+.btn:active { opacity: .75; }
+.btn svg {
+  width: 16px; height: 16px;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  flex-shrink: 0;
+}
+.btn-primary { background: var(--accent); color: #fff; }
+.btn-outline { background: transparent; border-color: var(--border); color: var(--text); }
+.btn-block { width: 100%; margin-top: 10px; }
+
+/* ── Period row ──────────────────────────────────────────────────────── */
+.period-row {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr auto;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 10px;
+}
+.period-sep { color: var(--text-3); font-size: 0.85rem; text-align: center; }
+.period-del {
+  width: 32px; height: 32px;
+  border-radius: 6px;
+  background: var(--danger-tint);
+  border: none;
+  color: var(--danger);
+  font-size: 1rem;
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+}
+
+/* ── Toast ───────────────────────────────────────────────────────────── */
+.toast {
+  position: fixed;
+  bottom: calc(var(--tab-h) + var(--safe-b) + 16px);
+  left: 50%; transform: translateX(-50%) translateY(12px);
+  background: var(--text);
+  color: var(--bg);
+  padding: 9px 20px;
+  border-radius: 20px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  opacity: 0;
+  transition: opacity .2s, transform .2s;
+  pointer-events: none;
+  white-space: nowrap;
+  z-index: 200;
+}
+.toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+/* ── Divider ─────────────────────────────────────────────────────────── */
+.divider {
+  height: 1px;
+  background: var(--border);
+  margin: 14px 0;
+}
+</style>
+
+<!-- ═══ MARKUP ══════════════════════════════════════════════════════════ -->
+
+<header class="app-header">
+  <h1>Framelink</h1>
+  <div class="status-pill">
+    <span class="status-dot" id="statusDot"></span>
+    <span id="statusText">Verbinden…</span>
+  </div>
+</header>
+
+<main>
+
+  <!-- Remote ─────────────────────────────────────────────────────────── -->
+  <div class="tab active" id="tab-remote">
+
+    <div class="section-label">Gerade angezeigt</div>
+    <div class="card now-playing">
+      <div class="card-body">
+        <div class="np-label">Aktuell</div>
+        <div class="np-title" id="npTitle">Wird geladen…</div>
+        <div class="np-meta" id="npMeta"></div>
+      </div>
+    </div>
+
+    <div class="section-label" style="margin-top:20px">Steuerung</div>
+    <div class="card">
+      <div class="card-body" style="display:flex;flex-direction:column;gap:10px">
+        <div class="remote-row">
+          <button class="ctrl-btn primary" onclick="sendCmd('next')">
+            <svg viewBox="0 0 24 24"><polyline points="5 4 15 12 5 20"/><line x1="19" y1="4" x2="19" y2="20"/></svg>
+            Nächstes
+          </button>
+          <button class="ctrl-btn" id="pauseBtn" onclick="togglePause()">
+            <svg id="pauseIcon" viewBox="0 0 24 24"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
+            <span id="pauseLabel">Pause</span>
+          </button>
+        </div>
+        <div class="remote-row full">
+          <button class="ctrl-btn danger" onclick="excludeCurrent()">
+            <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg>
+            Dieses Foto nicht mehr zeigen
+          </button>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Anzeige ─────────────────────────────────────────────────────────── -->
+  <div class="tab" id="tab-display">
+
+    <div class="section-label">Overlay</div>
+    <div class="card">
+      <div class="card-body">
+        <div class="row">
+          <div><div class="row-label">Overlay anzeigen</div></div>
+          <label class="toggle"><input type="checkbox" id="overlayEnabled" onchange="saveOverlay()"><span class="toggle-track"></span></label>
+        </div>
+        <div class="row">
+          <div><div class="row-label">Album-Name</div></div>
+          <label class="toggle"><input type="checkbox" id="fieldAlbum" onchange="saveOverlay()"><span class="toggle-track"></span></label>
+        </div>
+        <div class="row">
+          <div><div class="row-label">Person</div></div>
+          <label class="toggle"><input type="checkbox" id="fieldOwner" onchange="saveOverlay()"><span class="toggle-track"></span></label>
+        </div>
+        <div class="row">
+          <div><div class="row-label">Datum</div></div>
+          <label class="toggle"><input type="checkbox" id="fieldDate" onchange="saveOverlay()"><span class="toggle-track"></span></label>
+        </div>
+        <div class="row">
+          <div><div class="row-label">Position</div></div>
+          <select id="overlayPosition" onchange="saveOverlay()" style="background:var(--card);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:4px 10px;font-size:.9rem">
+            <option value="bottom">Unten</option>
+            <option value="top">Oben</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <div class="section-label" style="margin-top:20px">Bildwechsel</div>
+    <div class="card">
+      <div class="card-body">
+        <div class="field">
+          <label>Intervall (Minuten)</label>
+          <input type="number" id="rotInterval" min="1" max="120" onchange="saveDisplay()">
+        </div>
+        <div class="field">
+          <label>Reihenfolge</label>
+          <select id="rotOrder" onchange="saveDisplay()">
+            <option value="random">Zufällig</option>
+            <option value="chronological">Chronologisch</option>
+            <option value="album_grouped">Nach Album</option>
+          </select>
+        </div>
+        <div class="field" style="margin-bottom:0">
+          <label>Übergang</label>
+          <select id="transStyle" onchange="saveDisplay()">
+            <option value="fade">Überblenden</option>
+            <option value="cut">Schnitt</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Alben ─────────────────────────────────────────────────────────── -->
+  <div class="tab" id="tab-albums">
+    <div class="section-label">Registrierte Alben</div>
+    <div class="card">
+      <div class="card-body" id="albumList" style="padding-top:4px;padding-bottom:4px">
+        <div style="color:var(--text-3);padding:12px 0">Wird geladen…</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Zeitplan ─────────────────────────────────────────────────────── -->
+  <div class="tab" id="tab-schedule">
+    <div class="section-label">Aktive Zeiten</div>
+    <div class="card">
+      <div class="card-body">
+        <div id="periodList"></div>
+        <div class="divider"></div>
+        <button class="btn btn-outline btn-block" onclick="addPeriod()">
+          <svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          Zeitraum hinzufügen
+        </button>
+        <button class="btn btn-primary btn-block" onclick="saveSchedule()">Speichern</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- System ─────────────────────────────────────────────────────────── -->
+  <div class="tab" id="tab-system">
+    <div class="section-label">Cache</div>
+    <div class="stats-grid">
+      <div class="stat-cell"><div class="stat-val" id="statSlots">–</div><div class="stat-lbl">Slots</div></div>
+      <div class="stat-cell"><div class="stat-val" id="statPhotos">–</div><div class="stat-lbl">Fotos</div></div>
+      <div class="stat-cell"><div class="stat-val" id="statMB">–</div><div class="stat-lbl">MB</div></div>
+    </div>
+    <div class="card">
+      <div class="card-body">
+        <button class="btn btn-primary btn-block" onclick="triggerSync()" style="margin-top:0">
+          <svg viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+          Jetzt synchronisieren
+        </button>
+      </div>
+    </div>
+  </div>
+
+</main>
+
+<nav class="app-nav">
+  <button class="nav-btn active" onclick="showTab('remote',this)">
+    <svg viewBox="0 0 24 24"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 2v5M8 2v5M12 12v4M10 14h4"/></svg>
+    Remote
+  </button>
+  <button class="nav-btn" onclick="showTab('display',this)">
+    <svg viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+    Anzeige
+  </button>
+  <button class="nav-btn" onclick="showTab('albums',this)">
+    <svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+    Alben
+  </button>
+  <button class="nav-btn" onclick="showTab('schedule',this)">
+    <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+    Zeitplan
+  </button>
+  <button class="nav-btn" onclick="showTab('system',this)">
+    <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93A10 10 0 0 0 4.93 19.07M4.93 4.93a10 10 0 0 0 14.14 14.14"/></svg>
+    System
+  </button>
+</nav>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ── Helpers ──────────────────────────────────────────────────────────
+async function api(path, opts = {}) {
+  const res = await fetch(path, { headers: { "Content-Type": "application/json" }, ...opts });
+  return res.json();
+}
+
+let _toastTimer;
+function toast(msg, dur = 2200) {
+  const el = document.getElementById("toast");
+  el.textContent = msg;
+  el.classList.add("show");
+  clearTimeout(_toastTimer);
+  _toastTimer = setTimeout(() => el.classList.remove("show"), dur);
+}
+
+// ── Navigation ───────────────────────────────────────────────────────
+function showTab(name, btn) {
+  document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
+  document.querySelectorAll(".nav-btn").forEach(b => b.classList.remove("active"));
+  document.getElementById("tab-" + name).classList.add("active");
+  btn.classList.add("active");
+  if (name === "albums")   loadAlbums();
+  if (name === "system")   loadStatus();
+  if (name === "display")  loadDisplayConfig();
+  if (name === "schedule") loadSchedule();
+}
+
+// ── Remote ───────────────────────────────────────────────────────────
+let _paused = false;
+let _currentGuid = null;
+
+async function sendCmd(cmd) {
+  await api("/api/remote/" + cmd, { method: "POST" });
+  toast(cmd === "next" ? "Nächstes Foto" : "OK");
+  setTimeout(loadCurrent, 800);
+}
+
+async function togglePause() {
+  _paused = !_paused;
+  await api("/api/remote/pause", { method: "POST" });
+  const btn = document.getElementById("pauseBtn");
+  const icon = document.getElementById("pauseIcon");
+  document.getElementById("pauseLabel").textContent = _paused ? "Fortsetzen" : "Pause";
+  icon.innerHTML = _paused
+    ? '<polygon points="5 3 19 12 5 21 5 3"/>'
+    : '<rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/>';
+  btn.classList.toggle("active-state", _paused);
+  toast(_paused ? "Pausiert" : "Läuft");
+}
+
+async function excludeCurrent() {
+  if (!_currentGuid) { toast("Kein Foto aktiv"); return; }
+  await api("/api/remote/exclude", { method: "POST", body: JSON.stringify({ guid: _currentGuid }) });
+  toast("Foto wird nicht mehr angezeigt");
+  setTimeout(loadCurrent, 1000);
+}
+
+async function loadCurrent() {
+  try {
+    const data = await api("/api/remote/current");
+    const titleEl = document.getElementById("npTitle");
+    const metaEl  = document.getElementById("npMeta");
+    if (!data || !data.photos?.length) {
+      titleEl.textContent = "Kein Foto aktiv";
+      metaEl.innerHTML = "";
+      return;
+    }
+    const p = data.photos[0];
+    _currentGuid = p.guid;
+    titleEl.textContent = p.album_name || "Unbekanntes Album";
+    const parts = [];
+    if (p.owner_first) parts.push(p.owner_first + (p.owner_last ? " " + p.owner_last : ""));
+    if (p.captured_at) parts.push(new Date(p.captured_at).toLocaleDateString("de-DE", { day:"numeric", month:"long", year:"numeric" }));
+    metaEl.innerHTML = parts.map(t => `<span>${t}</span>`).join("");
+  } catch { /* offline */ }
+}
+
+// ── System ───────────────────────────────────────────────────────────
+async function loadStatus() {
+  try {
+    const s = await api("/api/status");
+    document.getElementById("statSlots").textContent  = s.queue_slots;
+    document.getElementById("statPhotos").textContent = s.cached_photos;
+    document.getElementById("statMB").textContent     = s.cache_size_mb;
+    const dot = document.getElementById("statusDot");
+    const txt = document.getElementById("statusText");
+    dot.classList.add("online");
+    txt.textContent = "Verbunden";
+  } catch {
+    document.getElementById("statusText").textContent = "Offline";
+  }
+}
+
+async function triggerSync() {
+  const r = await api("/api/sync", { method: "POST" });
+  toast(r.ok ? "Sync gestartet" : "Fehler: " + r.error, 3000);
+}
+
+// ── Albums ───────────────────────────────────────────────────────────
+async function loadAlbums() {
+  const albums = await api("/api/albums");
+  const el = document.getElementById("albumList");
+  if (!albums.length) {
+    el.innerHTML = '<div style="color:var(--text-3);padding:12px 0">Keine Alben registriert</div>';
+    return;
+  }
+  el.innerHTML = albums.map(a => `
+    <div class="album-row">
+      <div class="album-icon">
+        <svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+      </div>
+      <div style="flex:1;min-width:0">
+        <div class="album-name">${a.album_name || "Unbekanntes Album"}</div>
+        <div class="album-meta">${a.owner}</div>
+      </div>
+      <div class="album-count">${a.photo_count} Fotos</div>
+    </div>
+  `).join("");
+}
+
+// ── Display config ───────────────────────────────────────────────────
+async function loadDisplayConfig() {
+  const [ov, disp] = await Promise.all([api("/api/config/overlay"), api("/api/config/display")]);
+  document.getElementById("overlayEnabled").checked  = ov.enabled;
+  document.getElementById("fieldAlbum").checked      = ov.fields.album_name;
+  document.getElementById("fieldOwner").checked      = ov.fields.owner;
+  document.getElementById("fieldDate").checked       = ov.fields.date;
+  document.getElementById("overlayPosition").value   = ov.position || "bottom";
+  document.getElementById("rotInterval").value      = disp.rotation.interval_minutes;
+  document.getElementById("rotOrder").value         = disp.rotation.order;
+  document.getElementById("transStyle").value       = disp.transition.style;
+}
+
+async function saveOverlay() {
+  await api("/api/config/overlay", { method: "POST", body: JSON.stringify({
+    enabled:  document.getElementById("overlayEnabled").checked,
+    position: document.getElementById("overlayPosition").value,
+    fields: {
+      album_name: document.getElementById("fieldAlbum").checked,
+      owner:      document.getElementById("fieldOwner").checked,
+      date:       document.getElementById("fieldDate").checked,
+      location:   false,
+    }
+  })});
+  toast("Gespeichert");
+}
+
+async function saveDisplay() {
+  await api("/api/config/display", { method: "POST", body: JSON.stringify({
+    rotation:   { interval_minutes: +document.getElementById("rotInterval").value,
+                  order: document.getElementById("rotOrder").value },
+    transition: { style: document.getElementById("transStyle").value },
+  })});
+  toast("Gespeichert");
+}
+
+// ── Schedule ─────────────────────────────────────────────────────────
+let _periods = [];
+
+async function loadSchedule() {
+  const s = await api("/api/config/schedule");
+  _periods = s.active_periods;
+  renderPeriods();
+}
+
+function renderPeriods() {
+  document.getElementById("periodList").innerHTML = _periods.map((p, i) => `
+    <div class="period-row">
+      <input type="time" value="${p.start}" onchange="_periods[${i}].start=this.value">
+      <div class="period-sep">–</div>
+      <input type="time" value="${p.end}"   onchange="_periods[${i}].end=this.value">
+      <button class="period-del" onclick="removePeriod(${i})" title="Entfernen">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+  `).join("");
+}
+
+function addPeriod()       { _periods.push({ start: "08:00", end: "22:00" }); renderPeriods(); }
+function removePeriod(i)   { _periods.splice(i, 1); renderPeriods(); }
+
+async function saveSchedule() {
+  await api("/api/config/schedule", { method: "POST", body: JSON.stringify({ active_periods: _periods }) });
+  toast("Zeitplan gespeichert");
+}
+
+// ── Init ─────────────────────────────────────────────────────────────
+if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js");
+
+loadCurrent();
+loadStatus();
+setInterval(loadCurrent, 30000);
+setInterval(loadStatus,  60000);
+</script>

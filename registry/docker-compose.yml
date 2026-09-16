@@ -1,0 +1,19 @@
+services:
+  registry:
+    build: .
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      # Required
+      FRAMELINK_API_KEY: ${FRAMELINK_API_KEY:?FRAMELINK_API_KEY is required}
+      # Optional — defaults to SQLite inside the data volume.
+      # For an existing PostgreSQL instance on the Pi:
+      #   FRAMELINK_DATABASE_URL: postgresql://user:password@host/framelink
+      FRAMELINK_DATABASE_URL: ${FRAMELINK_DATABASE_URL:-sqlite+aiosqlite:///./data/framelink.db}
+    volumes:
+      # Only used for the SQLite default; mount is harmless when using PostgreSQL
+      - registry-data:/app/data
+
+volumes:
+  registry-data:

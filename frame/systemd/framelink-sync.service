@@ -1,0 +1,16 @@
+[Unit]
+Description=Framelink photo sync
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=framelink
+EnvironmentFile=-/etc/framelink/env
+ExecStart=/opt/framelink/venv/bin/framelink-sync
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=framelink-sync
+
+# Give it up to 5 minutes — slow iCloud + many photos can take a while
+TimeoutStartSec=300

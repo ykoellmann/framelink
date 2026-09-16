@@ -1,0 +1,40 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "framelink-frame"
+version = "0.1.0"
+description = "Sync + display client for the Framelink Raspberry Pi photo frame"
+requires-python = ">=3.11"
+dependencies = [
+    "httpx>=0.27",
+    "pydantic>=2.0",
+    "pyyaml>=6.0",
+    "pillow>=10.0",        # image download + EXIF + blurred fill pre-render
+    "geopy>=2.4",          # Nominatim reverse-geocoding
+]
+
+[project.optional-dependencies]
+display = [
+    "pygame>=2.5",
+]
+webui = [
+    "flask>=3.0",
+]
+dev = [
+    "pytest>=8",
+    "pytest-asyncio>=0.23",
+    "respx>=0.21",         # mock httpx in tests
+]
+
+[project.scripts]
+framelink-sync    = "framelink_frame.sync.main:main"
+framelink-display = "framelink_frame.display.main:main"
+framelink-webui   = "framelink_frame.webui.main:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/framelink_frame"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
