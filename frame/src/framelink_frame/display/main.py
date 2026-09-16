@@ -17,6 +17,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import random
 import signal
 import sys
 import time
@@ -149,8 +150,8 @@ class DisplayService:
     def reload_queue(self) -> None:
         self.queue = self.load_queue()
         self.metadata = self.load_metadata()
-        self.slot_index = 0
-        log.info("Queue reloaded: %d slot(s)", len(self.queue))
+        self.slot_index = random.randint(0, len(self.queue) - 1) if self.queue else 0
+        log.info("Queue reloaded: %d slot(s), starting at slot %d", len(self.queue), self.slot_index)
 
     def advance_slot(self) -> None:
         if self.queue:
