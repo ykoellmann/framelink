@@ -30,11 +30,11 @@ The version in `registry/pyproject.toml` and `frame/pyproject.toml` stays `0.1.0
 ## First time only
 
 1. Push to GitHub and make the repository public.
-2. After the first successful `docker.yml` run, open the repository's **Packages**, then each package (`framelink-registry`, `framelink-frame`) → **Package settings** → **Change visibility** → **Public**. GHCR packages start private, and this cannot be done from a workflow. Until then `docker pull` needs a login.
+2. After the first successful `docker.yml` run, check the visibility of the two packages (`framelink-registry`, `framelink-frame`): the repository's **Packages** → the package → **Package settings**. With a public repository they were public from the start (the images carry the `org.opencontainers.image.source` label that links them to it). If one is private, use **Change visibility** → **Public**; a workflow cannot do that. A quick test without any login: `docker pull ghcr.io/<owner>/framelink-registry:latest`.
 3. Check that **Settings → Actions → General → Workflow permissions** allows the workflows to create releases (the workflow asks for `contents: write` itself).
 
 ## Checking a release
 
-- `docker pull ghcr.io/<owner>/framelink-registry:1.2.3` works without login (after step 2).
+- `docker pull ghcr.io/<owner>/framelink-registry:1.2.3` works without login. The images contain `linux/amd64` and `linux/arm64`.
 - On a Pi: `curl … | sudo bash` and `sudo framelink-update v1.2.3`.
 - The installer can be tested without GitHub: build a release folder layout (`latest/download/{install.sh,framelink-frame.tar.gz}`) and run `FRAMELINK_RELEASE_BASE=file:///path bash install.sh --no-systemd --no-cec` in a `debian:bookworm-slim` container.
