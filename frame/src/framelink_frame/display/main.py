@@ -23,9 +23,11 @@ import sys
 import time
 from pathlib import Path
 
+from .. import ipc
+
 log = logging.getLogger(__name__)
 
-_CMD_FILE = Path("/tmp/frame-cmd")
+_CMD_FILE = ipc.cmd_file()
 
 
 def _run_cmd(args: list[str]) -> bool:
@@ -81,6 +83,25 @@ def _kscreen_dpms(state: str, screen_w: int, screen_h: int) -> bool:
 _CMD_POLL_INTERVAL = 1.0  # seconds between IPC polls
 
 
+def calendar_update(prev_stamp, tz_name: str):
+    """
+    Check whether the sidebar needs a redraw: calendar.json changed (mtime) or the date
+    changed in the configured time zone (the Pi itself usually runs on UTC).
+    Returns (new_stamp, entries) if so, otherwise None. Cheap enough for the 1 s poll.
+    """
+    from ..sync.cache import calendar_path, load_calendar
+    from ..sync.calendar_sync import today_in
+    try:
+        mtime = calendar_path().stat().st_mtime_ns
+    except OSError:
+        mtime = None
+    stamp = (mtime, today_in(tz_name))
+    if stamp == prev_stamp:
+        return None
+    data = load_calendar()
+    return stamp, (data.get("entries", []) if data else [])
+
+
 class DisplayService:
     def __init__(self) -> None:
         import pygame
@@ -109,6 +130,8 @@ class DisplayService:
         self.paused = False
         self.running = True
         self.current_surface = None
+        self.cal_stamp = None          # (calendar.json mtime, date) the sidebar was last drawn for
+        self.cal_entries: list = []
 
         # Screen
         pygame.init()
@@ -153,6 +176,16 @@ class DisplayService:
         self.slot_index = random.randint(0, len(self.queue) - 1) if self.queue else 0
         log.info("Queue reloaded: %d slot(s), starting at slot %d", len(self.queue), self.slot_index)
 
+    def refresh_calendar(self) -> bool:
+        """Reload the sidebar data if calendar.json or the date changed. True = the current slot must be redrawn."""
+        if not self.config.calendar.enabled:
+            return False
+        update = calendar_update(self.cal_stamp, self.config.calendar.timezone)
+        if update is None:
+            return False
+        self.cal_stamp, self.cal_entries = update
+        return True
+
     def advance_slot(self) -> None:
         if self.queue:
             self.slot_index = (self.slot_index + 1) % len(self.queue)
@@ -175,6 +208,22 @@ class DisplayService:
         w, h = self.screen_w, self.screen_h
 
         try:
+            if self.config.calendar.enabled:
+                # Calendar layout: photo area + sidebar (see compose.py); pairs and singles alike
+                from ..sync.calendar_sync import today_in
+                from . import compose
+                guids = [slot["guid"]] if slot["type"] == "single" else slot["guids"]
+                paths = [self.image_path(g) for g in guids]
+                if not all(p.exists() for p in paths):
+                    log.warning("Image(s) missing for %s — skipping slot", guids)
+                    return None
+                cal = self.config.calendar
+                pil_img = compose.compose_slot(paths, (w, h), cal, self.cal_entries, today_in(cal.timezone))
+                surf = self.renderer.pil_to_pygame_surface(pil_img)
+                self.overlay.draw_overlay(surf, guids[0], w, h, self.metadata,
+                                          area_w=round(w * compose.PANE_FRACTION))
+                return surf, guids[0]
+
             if slot["type"] == "single":
                 guid = slot["guid"]
                 path = self.image_path(guid)
@@ -239,6 +288,9 @@ class DisplayService:
         if cmd == "reload-config":
             self.reload_config()
             return True  # re-render current slot with new settings
+        if cmd == "reload-calendar":
+            self.cal_stamp = None   # forces refresh_calendar() to reload and redraw on the next poll
+            return False
         if cmd == "next":
             self.advance_slot()
             return True
@@ -265,10 +317,13 @@ class DisplayService:
     # Show a black screen (e.g. outside active hours)
     # ------------------------------------------------------------------
 
-    def screen_off(self) -> None:
-        # Always blank pygame surface first
+    def show_black(self) -> None:
         self.screen.fill((0, 0, 0))
         self.pg.display.flip()
+
+    def screen_off(self) -> None:
+        # Always blank pygame surface first: it is also the fallback when nothing can power the screen off (containers)
+        self.show_black()
         if self._windowed:
             return
         if _run_cmd(["vcgencmd", "display_power", "0"]):
@@ -307,6 +362,7 @@ class DisplayService:
 
     def run(self) -> None:
         self.reload_queue()
+        self.refresh_calendar()   # entries for the first render
 
         if not self.queue:
             log.warning("Queue is empty — waiting for sync")
@@ -353,6 +409,10 @@ class DisplayService:
                         # Trigger immediate re-render without advancing slot
                         last_advance = 0.0
                         force_render = True
+                if self.refresh_calendar():
+                    # New calendar data or a new day: redraw the current photo, do not advance
+                    last_advance = 0.0
+                    force_render = True
                 last_cmd_poll = now
 
             # Outside active hours → turn screen off, poll events so window stays responsive
@@ -383,7 +443,8 @@ class DisplayService:
                 last_advance = 0.0
 
             # Time to advance to next slot?
-            if not self.paused and (now - last_advance >= interval_s):
+            # A forced redraw (command, new calendar data, midnight) also happens while paused
+            if (not self.paused or force_render) and (now - last_advance >= interval_s):
                 if not force_render:  # avoid double-advance on reload
                     self.advance_slot()
                 force_render = False
@@ -419,7 +480,7 @@ class DisplayService:
                         log.debug("Could not record view for slot %s", displayed_slot)
                     try:
                         import json as _json
-                        Path("/tmp/frame-current").write_text(_json.dumps(displayed_slot))
+                        ipc.current_file().write_text(_json.dumps(displayed_slot))
                     except OSError:
                         pass
 

@@ -10,8 +10,8 @@ from fastapi import Depends, FastAPI
 from .auth import require_api_key
 from .config import settings
 from .database import Base, engine
-from .jobs import refresh_all_albums
-from .routers import albums
+from .jobs import refresh_all_albums, refresh_all_calendars
+from .routers import albums, calendar
 
 log = logging.getLogger(__name__)
 
@@ -31,6 +31,14 @@ async def lifespan(app: FastAPI):
         id="refresh_all_albums",
         replace_existing=True,
         # Run once immediately so the DB is fresh on first boot
+        next_run_time=datetime.now(timezone.utc),
+    )
+    scheduler.add_job(
+        refresh_all_calendars,
+        trigger=IntervalTrigger(minutes=settings.calendar_refresh_interval_minutes),
+        id="refresh_all_calendars",
+        replace_existing=True,
+        max_instances=1,
         next_run_time=datetime.now(timezone.utc),
     )
     scheduler.start()
@@ -53,6 +61,7 @@ app = FastAPI(
 )
 
 app.include_router(albums.router)
+app.include_router(calendar.router)
 
 
 @app.get("/health", tags=["meta"])

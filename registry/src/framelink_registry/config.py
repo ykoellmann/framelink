@@ -19,6 +19,13 @@ class Settings(BaseSettings):
     # How often the background job refreshes album metadata from iCloud (minutes)
     metadata_refresh_interval_minutes: int = 60
 
+    # Calendar sidebar: timezone for timed events / "today", refresh cadence,
+    # and the window (days before/after today) that gets stored per source.
+    timezone: str = "Europe/Berlin"
+    calendar_refresh_interval_minutes: int = 30
+    calendar_window_back_days: int = 14
+    calendar_window_ahead_days: int = 90
+
     def model_post_init(self, __context) -> None:  # noqa: ANN001
         url = self.database_url
         if url.startswith("sqlite:///") and "+aiosqlite" not in url:

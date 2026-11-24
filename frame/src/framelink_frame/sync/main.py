@@ -24,6 +24,7 @@ from pathlib import Path
 
 import httpx
 
+from .. import ipc
 from ..config import config
 from . import db
 from .cache import image_path, is_downloaded, save_queue, evict_stale_images, cache_size_mb
@@ -33,7 +34,7 @@ from .registry import fetch_albums
 
 log = logging.getLogger(__name__)
 
-_CMD_FILE = Path("/tmp/frame-cmd")
+_CMD_FILE = ipc.cmd_file()
 
 
 def _send_cmd(cmd: str) -> None:

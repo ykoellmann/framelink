@@ -52,3 +52,12 @@ sync:
 geocoding:
   enabled: true
   user_agent: "framelink/0.1"
+
+calendar:
+  enabled: false        # true = calendar sidebar next to the photo (25 % of the screen)
+  ids: []               # registry calendar ids to show on this frame; choose them in the web UI
+  timezone: Europe/Berlin   # keep equal to the registry's FRAMELINK_TIMEZONE
+  style: dark           # dark | glass | light
+  horizon_weeks: 4      # 2-4; fewer weeks are shown automatically if they do not fit
+  multi_line: true      # up to 2 lines per day instead of 1 line + "+n"
+  edge: softer          # photo edge toward free space: hard | soft | softer | mirror

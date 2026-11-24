@@ -1,0 +1,253 @@
+<title>Framelink Zeitstrahl</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@400;500;600;700&display=swap">
+<style>
+/* Concept: one design, merged from the favourites: big date on top, timeline below, sidebar width = space the photo leaves.
+   Everything inside the frame is sized in cqw (1cqw = 19.2px at 1080p). */
+:root{
+  --bg:#f5f5f2; --fg:#17191d; --muted:#5f646d; --line:#d9d9d2; --chip:#ebebe6; --bar:#f5f5f2;
+  --hol:#ff6b5b; --bday:#ffc247; --evt:#4fd1c0; --obs:#9aa7bd; --fer:#e0b565; --r1:#a98bff; --r2:#ff79c6; --r3:#5b9dff; --r4:#9bd84e;
+  --f-body:'Inter',system-ui,sans-serif; --f-disp:'Space Grotesk','Inter',system-ui,sans-serif;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#101215; --fg:#ecece8; --muted:#9a9fa8; --line:#2c2f35; --chip:#1f2227; --bar:#101215; color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#101215; --fg:#ecece8; --muted:#9a9fa8; --line:#2c2f35; --chip:#1f2227; --bar:#101215; color-scheme:dark}
+
+body{background:var(--bg);color:var(--fg);font:15px/1.5 var(--f-body);
+  padding-block:2.5rem 4rem;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--bar)}
+.wrap{max-width:1100px;margin:0 auto}
+h1{font:600 clamp(1.7rem,3.2vw,2.4rem)/1.1 var(--f-disp);margin:0 0 .6rem;text-wrap:balance}
+.lead{max-width:66ch;color:var(--muted);margin:0 0 1rem}
+.legend{display:flex;flex-wrap:wrap;gap:.5rem .6rem;margin:0 0 1rem;padding:0;list-style:none;font-size:.85rem}
+.legend li{display:flex;align-items:center;gap:.45rem;background:var(--chip);padding:.25rem .7rem;border-radius:99px}
+.legend i{width:.6rem;height:.6rem;border-radius:50%}
+.switch{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--bar);padding:.6rem 0;margin-bottom:1.25rem;display:flex;flex-wrap:wrap;gap:.5rem 1.5rem;border-bottom:1px solid var(--line)}
+@media (max-width:720px){.switch{position:static}}
+.grp{display:flex;flex-wrap:wrap;gap:.35rem;align-items:center}
+.grp>span{color:var(--muted);font-size:.8rem;margin-right:.2rem}
+button{font:inherit}
+.grp button{font:500 .8rem var(--f-body);color:var(--fg);background:var(--chip);border:1px solid transparent;border-radius:99px;padding:.3rem .8rem;cursor:pointer}
+.grp button[aria-pressed="true"]{background:var(--fg);color:var(--bg)}
+button:focus-visible{outline:2px solid var(--fg);outline-offset:2px}
+.thumbs{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:.8rem;margin-bottom:1.25rem}
+.th{background:none;border:0;padding:.35rem;border-radius:.7rem;cursor:pointer;color:var(--fg);text-align:left;outline:2px solid transparent}
+.th[aria-pressed="true"]{outline-color:var(--fg)}
+.th small{display:flex;justify-content:space-between;gap:.5rem;margin-top:.35rem;font-size:.75rem;color:var(--muted)}
+.th .tv{pointer-events:none;border-radius:6px}
+.main-note{display:flex;flex-wrap:wrap;gap:.4rem 1.5rem;margin:.8rem 0 2rem;color:var(--muted);font-size:.85rem}
+.main-note b{color:var(--fg);font-weight:600}
+h2{font:600 1.2rem/1.2 var(--f-disp);margin:0 0 .6rem}
+.dec{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:1rem 1.5rem;padding:0;margin:0;list-style:none}
+.dec li{background:var(--chip);border-radius:.7rem;padding:.9rem 1rem;font-size:.9rem;color:var(--muted)}
+.dec b{display:block;color:var(--fg);margin-bottom:.2rem}
+
+/* ---------- TV frame ---------- */
+.tv{--tv-fg:#f4f2ee;--tv-dim:rgba(244,242,238,.66);--inv:#111;--zb:rgba(0,0,0,.22);--tint:rgba(255,255,255,.06);--line2:rgba(255,255,255,.16);
+  position:relative;aspect-ratio:16/9;container-type:inline-size;overflow:hidden;border-radius:10px;display:grid;
+  background:#0b0c0e;color:var(--tv-fg);font-family:var(--f-disp);isolation:isolate;
+  box-shadow:0 0 0 1px rgba(128,128,128,.25),0 14px 34px -18px rgba(0,0,0,.55)}
+.tv *{box-sizing:border-box}
+.pane{position:relative;overflow:hidden;min-width:0}
+.pv,.ph{position:absolute;inset:0}
+.blur{filter:blur(3cqw) brightness(.7);transform:scale(1.15)}
+.fitw{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%)}
+.fit,.mir{position:absolute;inset:0}
+.fit{overflow:hidden}
+.pair{display:flex;gap:1.2%}.fit.pair{overflow:visible}.pair .ph{position:relative;flex:1}
+/* Masken (weicher Rand) und Spiegelungen: die Verläufe baut das Skript mit sanfter Kurve */
+.mir{filter:blur(2cqw) brightness(.75)}
+.mir.l{inset:0 auto 0 -100%;width:100%;transform:scaleX(-1)}
+.mir.r{inset:0 -100% 0 auto;width:100%;transform:scaleX(-1)}
+.mir.t{inset:-100% 0 auto 0;height:100%;transform:scaleY(-1)}
+.mir.b{inset:auto 0 -100% 0;height:100%;transform:scaleY(-1)}
+.p1{background:radial-gradient(130% 55% at 15% 112%,#16231f 0 58%,transparent 59%),radial-gradient(110% 45% at 95% 118%,#233630 0 58%,transparent 59%),radial-gradient(45% 55% at 68% 52%,#ffe2ac 0,#ffb37a 35%,transparent 70%),linear-gradient(#2c4a78 0,#b8728a 52%,#f2a76f 78%)}
+.p2{background:radial-gradient(34% 5% at 62% 54%,rgba(255,255,255,.6),transparent 70%),linear-gradient(180deg,#86c1ec 0,#dcf0fb 47%,#2f86b5 47.5%,#12557f 100%)}
+.p3{background:radial-gradient(75% 90% at 28% 120%,#0f2a1c 0 50%,transparent 51%),radial-gradient(60% 80% at 85% 120%,#1b4630 0 50%,transparent 51%),linear-gradient(#d7e8c6,#74ab82 68%,#2e6246)}
+.p4{background:radial-gradient(120% 40% at 30% 110%,#eef3f8 0 60%,transparent 61%),radial-gradient(90% 35% at 92% 105%,#d2dde8 0 60%,transparent 61%),linear-gradient(#a6c1db,#e6eef6 75%)}
+.pill{position:absolute;left:50%;bottom:1.8cqw;transform:translateX(-50%);background:rgba(15,15,15,.6);color:#f4f2ee;
+  padding:.6cqw 1.5cqw;border-radius:99px;font:400 1.25cqw/1.2 var(--f-body);white-space:nowrap}
+
+.side{position:relative;color:var(--tv-fg);background:#111317;padding:1.4cqw 1.5cqw;display:flex;flex-direction:column;gap:1.2cqw;min-height:0;min-width:0}
+.sty-glass .side{background:rgba(10,11,14,.5);backdrop-filter:blur(1.8cqw) saturate(1.3);-webkit-backdrop-filter:blur(1.8cqw) saturate(1.3);box-shadow:inset 1px 0 rgba(255,255,255,.14)}
+.sty-light .side{background:#f6f7f9;--tv-fg:#14171b;--tv-dim:rgba(20,23,27,.64);--inv:#fff;--zb:rgba(20,23,27,.05);--tint:rgba(20,23,27,.055);--line2:rgba(20,23,27,.16);
+  --hol:#d63a2c;--bday:#d99a00;--evt:#0f9e8e;--obs:#7385a3;--fer:#b9861c;--r1:#7a4fd6;--r2:#d6358f;--r3:#1f6fd6;--r4:#5a9a12}
+.h{--c:var(--hol)}.b{--c:var(--bday)}.e{--c:var(--evt)}.o{--c:var(--obs)}.f{--c:var(--fer)}
+.dd::before{content:"";display:inline-block;width:.55em;height:.55em;border-radius:50%;background:var(--c);margin-right:.45em;vertical-align:.02em}
+
+/* header: date */
+.hd3{display:flex;align-items:center;gap:1.2cqw;flex:none}
+.big{font:700 4.6cqw/1 var(--f-disp);letter-spacing:-.03em;font-variant-numeric:tabular-nums}
+.ht{min-width:0}
+.ht b{display:block;font:600 1.9cqw/1.1 var(--f-disp)}
+.ht span.s{display:block;font:400 1.15cqw/1.3 var(--f-body);color:var(--tv-dim)}
+.ht .today{display:flex;flex-wrap:wrap;gap:0 1cqw;font:600 1.2cqw/1.3 var(--f-body)}
+
+/* timeline */
+.tl{display:grid;gap:0 2cqw;flex:1;min-height:0}
+.col{display:flex;flex-direction:column;justify-content:space-between;gap:.4cqw;min-width:0}
+.tw{font:500 calc(var(--rf)*.88)/1 var(--f-body);color:var(--tv-dim);display:flex;justify-content:space-between;gap:1cqw;border-bottom:1px solid var(--line2);padding:0 0 .25cqw;margin-bottom:.2cqw;white-space:nowrap}
+.tw em{font-style:normal}
+.tr{display:grid;grid-template-columns:calc(var(--rf)*2) calc(var(--rf)*1.9) minmax(0,1fr);gap:.5cqw;align-items:center;height:calc(var(--rh) + var(--x,0)*var(--rf)*1.15);padding:0 .4cqw 0 calc(.4cqw + var(--ln,0)*.55cqw);position:relative;font:500 var(--rf)/1.1 var(--f-body);border-radius:.3cqw;font-variant-numeric:tabular-nums}
+.tr .a{color:var(--tv-dim);font-size:.88em}.tr .b2{font:600 1.1em/1 var(--f-disp)}
+.tr.we{background:var(--tint)}.tr.zb{background:var(--zb)}
+.tr.wk .a{color:var(--tv-fg);font-weight:600}
+.tr.so .b2,.tr.hol .b2{color:var(--hol)}
+.tr .c{display:flex;flex-direction:column;justify-content:center;min-width:0}
+.ln{display:flex;align-items:center;gap:.6em;height:calc(var(--rf)*1.15);line-height:calc(var(--rf)*1.15)}
+.ln .dd{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.more{flex:none;font:600 .8em/1.4 var(--f-body);font-style:normal;padding:0 .5em;border-radius:99px;background:var(--tint);color:var(--tv-dim)}
+.tr.now .more{background:color-mix(in srgb,var(--inv) 22%,transparent);color:var(--inv)}
+.tr.m{align-items:start;padding-top:calc((var(--rh) - var(--rf)*1.15)/2)}
+.tr.m .a,.tr.m .b2{height:calc(var(--rf)*1.15);display:flex;align-items:center}
+.tr.past{opacity:.38;height:calc((var(--rh) + var(--x,0)*var(--rf)*1.15)*.8)}
+.tr.now{height:calc((var(--rh) + var(--x,0)*var(--rf)*1.15)*1.35);background:var(--tv-fg);color:var(--inv);font-size:calc(var(--rf)*1.12);margin:.15cqw 0}
+.tr.now .a,.tr.now .b2{color:var(--inv)}
+.tr.now .dd::before{box-shadow:0 0 0 .12em var(--inv)}
+/* mehrtägig: Urlaub = Streifen links der Zeile, Ferien = leichte Tönung, beides mit Pill unter der Wochenzeile */
+.ls{position:absolute;top:0;bottom:0;width:.4cqw;background:var(--c)}
+.tr.fe{background-image:linear-gradient(color-mix(in srgb,var(--fer) 17%,transparent),color-mix(in srgb,var(--fer) 17%,transparent))}
+.tr.now.fe{background-image:none}
+.tw{align-items:center}.tw .rp{flex:1;min-width:0;display:flex;flex-wrap:wrap;justify-content:flex-end;gap:.2cqw .3cqw}
+.pl{font:500 calc(var(--rf)*.8)/1.25 var(--f-body);padding:0 .6em;border-radius:99px;white-space:nowrap;background:color-mix(in srgb,var(--c) 24%,transparent);color:color-mix(in srgb,var(--c) 65%,var(--tv-fg))}
+.pl.past{opacity:.45}
+</style>
+
+<div class="wrap">
+  <h1>Zeitstrahl</h1>
+  <p class="lead">Das Datum steht groß oben, darunter läuft der Zeitstrahl ab dem Montag der aktuellen Woche. Die Leiste ist immer 25 % breit und hat immer eine Spalte. Das Foto sitzt in den übrigen 75 %, wie heute mit unscharfem Rand. Namen und Termine sind erfunden.</p>
+  <ul class="legend">
+    <li><i style="background:var(--hol)"></i>Feiertag</li><li><i style="background:var(--bday)"></i>Geburtstag</li>
+    <li><i style="background:var(--evt)"></i>Termin</li><li><i style="background:var(--obs)"></i>Gedenktag</li>
+    <li><i style="background:var(--r1)"></i><i style="background:var(--r2)"></i><i style="background:var(--r3)"></i><i style="background:var(--r4)"></i>Urlaub / Reise: jeder Eintrag eine Farbe</li><li><i style="background:var(--fer)"></i>Ferien (mehrere Tage)</li>
+  </ul>
+  <div class="switch" id="switch"></div>
+  <div class="thumbs" id="thumbs" role="group" aria-label="Fotoformat"></div>
+  <div class="tv" id="main"></div>
+  <div class="main-note" id="note"></div>
+
+  <h2>Noch offen</h2>
+  <ul class="dec">
+    <li><b>Mehrere Termine an einem Tag</b>Ein Tag bekommt bis zu zwei Zeilen, Feiertag vor Geburtstag vor Termin. Gibt es mehr, steht "+n" hinter der zweiten. Der 29. (zwei Einträge) und der 6. Dezember (drei Einträge) zeigen das. Werden dadurch zu viele Zeilen, zeigt der Zeitstrahl automatisch weniger Wochen.</li>
+    <li><b>Mehrtägige Einträge</b>Urlaub und Reisen sind ein farbiger Streifen links neben den Tagen, mit dem Namen als Pill in der Wochenzeile, dort wo sonst das Datum steht ("Lena im Urlaub"). Jeder Eintrag hat eine eigene Farbe, überlappende bekommen nebeneinander eigene Spuren, bis zu vier (Dezember, 7. bis 11.). Ferien sind nur eine leichte Tönung der Tage. Probier "Mi 25. (Urlaub)" bei Heute ist.</li>
+    <li><b>Horizont</b>Der Schalter nennt die höchste Wochenzahl. Mit 3 Wochen sind es rund 24 px Schrift, mit 4 nur etwa 19 px, mit 2 etwa 31 px.</li>
+    <li><b>Fotorand</b>Hart ist der Stand heute. Weich und Sehr weich lassen das Foto über 6 oder 10 % der Breite in den Hintergrund auslaufen. Das kostet Bildkante, je weicher, desto mehr. Gespiegelt setzt das Foto als unscharfe Spiegelung fort und verliert fast nichts. Der Hintergrund ist jetzt außerdem heller und weicher gezeichnet. Den Unterschied siehst du bei 16:9, 3:2 und Hochformat.</li>
+    <li><b>Hochformat-Paar</b>Der Normalfall für Hochformat. Es füllt die Fläche fast komplett, nur ein schmaler Streifen bleibt oben und unten.</li>
+    <li><b>Zeilenmuster</b>Wechselnd dunkelt jede zweite Zeile minimal ab, jede Woche beginnt mit einer hellen Zeile, damit Tag, Datum und Termine als eine Zeile zusammenbleiben. Das Wochenende erkennt man dann an der kräftigeren Wochentagsangabe und am roten Sonntag. "Wochenende getönt" ist die frühere Variante.</li>
+    <li><b>Stil</b>Hell ist am besten lesbar. Glas wirkt am ruhigsten, braucht aber ein weichgezeichnetes Hintergrundbild unter der Leiste.</li>
+  </ul>
+</div>
+
+<script>
+const Y=2026, M=10;
+const DOW=['So','Mo','Di','Mi','Do','Fr','Sa'];
+const DOWL=['Sonntag','Montag','Dienstag','Mittwoch','Donnerstag','Freitag','Samstag'];
+const MON=['Jan','Feb','Mär','Apr','Mai','Jun','Jul','Aug','Sep','Okt','Nov','Dez'];
+const MONL=['Januar','Februar','März','April','Mai','Juni','Juli','August','September','Oktober','November','Dezember'];
+// h Feiertag, b Geburtstag, e Termin, o Gedenktag. Tage > 30 laufen in den Dezember.
+const EV={1:[['h','Allerheiligen']],3:[['b','Tim']],9:[['b','Lena']],11:[['o','St. Martin']],12:[['e','Zahnarzt 14:00']],
+  14:[['b','Mama']],15:[['o','Volkstrauertag']],18:[['h','Buß- und Bettag']],20:[['e','Kino 20:00']],22:[['o','Totensonntag']],
+  24:[['e','Kaffee mit Ute']],27:[['b','Oma'],['e','Abendessen 18:30']],28:[['e','Adventskranz']],29:[['o','1. Advent'],['e','Plätzchen backen']],
+  33:[['e','Zahnarzt 9:30']],36:[['o','2. Advent'],['o','Nikolaus'],['e','Adventsbrunch']],40:[['b','Ute']],43:[['b','Papa']],54:[['o','Heiligabend']],55:[['h','1. Weihnachtstag']],56:[['h','2. Weihnachtstag']]};
+// mehrtägige Einträge (ganztägig mit Start und Ende): v = Urlaub, Reise (Streifen), f = Ferien (Tönung)
+const RG=[{a:16,b:20,t:'f',x:'Herbstferien'},{a:23,b:29,t:'v',x:'Lena im Urlaub'},{a:25,b:27,t:'v',x:'Papa auf Dienstreise'},
+  {a:35,b:42,t:'v',x:'Skiurlaub Ute'},{a:38,b:40,t:'v',x:'Besuch Tante Rita'},{a:39,b:41,t:'v',x:'Zeltlager Tim'},{a:40,b:42,t:'v',x:'Kur Opa'},{a:52,b:68,t:'f',x:'Weihnachtsferien'}];
+let T=21;
+const D=d=>new Date(Y,M,d), dn=d=>D(d).getDate(), wd=d=>DOW[D(d).getDay()];
+const S0=()=>T-((D(T).getDay()+6)%7);                       // Montag der aktuellen Woche
+const rng=(a,n)=>Array.from({length:n},(_,i)=>a+i);
+const evs=d=>EV[d]||[];
+const fmt=d=>dn(d)+'. '+MON[D(d).getMonth()];
+const isoKW=d=>{const t=new Date(Date.UTC(Y,M,d)),w=(t.getUTCDay()+6)%7;t.setUTCDate(t.getUTCDate()-w+3);
+  const f=new Date(Date.UTC(t.getUTCFullYear(),0,4));return 1+Math.round(((t-f)/864e5-3+((f.getUTCDay()+6)%7))/7)};
+const cls=d=>(d===T?' now':d<T?' past':'')+(D(d).getDay()===0?' so':'')+(evs(d).some(e=>e[0]==='h')?' hol':'')+(D(d).getDay()%6===0?(ST.rows==='we'?' we':' wk'):'')+(ST.rows==='zebra'&&(D(d).getDay()+6)%7%2===1?' zb':'')+(RG.some(r=>r.t==='f'&&inR(r,d))?' fe':'');
+const inR=(r,d)=>d>=r.a&&d<=r.b;
+const todayList=()=>evs(T).concat(RG.filter(r=>inR(r,T)).map(r=>[r.t,r.x,r.c]));
+const dd=e=>'<span class="dd '+e[0]+'"'+(e[2]?' style="--c:'+e[2]+'"':'')+'>'+e[1]+'</span>';
+
+function hdr(){const td=todayList();
+  return '<div class="hd3"><div class="big">'+dn(T)+'</div><div class="ht"><b>'+DOWL[D(T).getDay()]+'</b><span class="s">'+MONL[D(T).getMonth()]+' '+Y+' · KW '+isoKW(S0())+'</span>'+
+    (td.length?'<div class="today">'+td.map(dd).join('')+'</div>':'')+'</div></div>';}
+// Mehrere Termine: Feiertag, Geburtstag, Termin, Gedenktag. Mehrzeilig bis 2 Zeilen, der Rest als "+n".
+const ORD={h:0,b:1,e:2,o:3}, srt=d=>evs(d).slice().sort((x,y)=>ORD[x[0]]-ORD[y[0]]);
+let F1=false;   // wahr, wenn für mehrzeilige Termine kein Platz ist
+const nl=d=>ST.multi&&!F1?Math.max(1,Math.min(2,evs(d).length)):1;
+function cell(d){const e=srt(d);if(!e.length)return '';const L=nl(d), rest=e.length-L, badge=n=>n>0?'<em class="more">+'+n+'</em>':'';
+  return e.slice(0,L).map((x,i)=>'<span class="ln">'+dd(x)+(i===L-1?badge(rest):'')+'</span>').join('');}
+// Urlaub: überlappende Einträge bekommen je eine eigene Spur (bis 4) und eine eigene Farbe; die Farben rotieren,
+// damit aufeinanderfolgende Einträge verschieden aussehen
+{let rot=0;RG.filter(r=>r.t==='v').sort((x,y)=>x.a-y.a).forEach((r,i,arr)=>{
+  const ov=arr.slice(0,i).filter(o=>o.b>=r.a&&o.a<=r.b);
+  r.l=0;while(ov.some(o=>o.l===r.l)&&r.l<3)r.l++;
+  r.k=rot%4;while(ov.length<4&&ov.some(o=>o.k===r.k))r.k=(r.k+1)%4;
+  rot=r.k+1;r.c='var(--r'+(r.k+1)+')'})}
+const inWeek=a=>RG.filter(r=>r.a<=a+6&&r.b>=a&&(r.a>=a||a===S0()));   // Pill nur in der Woche, in der der Eintrag beginnt (oder im ersten sichtbaren Block)
+const lanesIn=(a0,W)=>Math.max(0,...RG.filter(r=>r.t==='v'&&r.a<=a0+7*W-1&&r.b>=a0).map(r=>r.l+1));
+const pills=a=>'<span class="rp">'+inWeek(a).map(r=>'<span class="pl '+r.t+(r.b<T?' past':'')+'" style="--c:'+(r.c||'var(--fer)')+'">'+r.x+'</span>').join('')+'</span>';
+function pillH(a,rf){const rs=inWeek(a);if(!rs.length)return 0;                     // Zusatzhöhe, wenn die Pills in der Wochenzeile umbrechen
+  const w=rs.reduce((s,r)=>s+r.x.length*.55*rf*.8+1.1,0);
+  return (Math.ceil(w/17)-1)*(rf*.8*1.25+.2)}
+function strips(d){return RG.filter(r=>r.t==='v'&&inR(r,d)).map(r=>{
+  const s=d===r.a,e=d===r.b,rad=s&&e?'.3cqw':s?'.3cqw .3cqw 0 0':e?'0 0 .3cqw .3cqw':'0';
+  return '<i class="ls" style="left:calc(.3cqw + '+r.l+'*.55cqw);'+(s?'top:.15cqw;':'')+(e?'bottom:.15cqw;':'')+'border-radius:'+rad+';--c:'+r.c+'"></i>'}).join('')}
+function week(a){
+  return '<div><div class="tw"><span>KW '+isoKW(a)+'</span>'+(inWeek(a).length?pills(a):'<em>'+fmt(a)+' – '+fmt(a+6)+'</em>')+'</div>'+
+    rng(a,7).map(d=>{const n=nl(d);return '<div class="tr'+cls(d)+(n>1?' m':'')+'" style="--x:'+(n-1)+'">'+strips(d)+'<span class="a">'+wd(d)+'</span><span class="b2">'+dn(d)+'</span><span class="c">'+cell(d)+'</span></div>'}).join('')+'</div>';}
+// Zeilenhöhe und Schrift (cqw) je Wochenzahl; es werden so viele Wochen gezeigt, wie in die Höhe passen
+const P={4:[1.4,1],3:[1.9,1.25],2:[2.9,1.6]};
+function need(W,sc=1){const rh=P[W][0]*sc, rf=P[W][1]*sc, a0=S0(), td=todayList().length;
+  let t=4.7+(td?.6+(td>1?.8:0)+(td>2?.8:0):0)+1.2;
+  for(let k=0;k<W;k++){const a=a0+7*k;t+=rf*.88+.5+.4+pillH(a,rf);
+    for(let d=a;d<a+7;d++){const h=rh+(nl(d)-1)*rf*1.15;t+=d<T?h*.8:d===T?h*1.35+.3:h}}
+  return t}
+// bevorzugt mehr Wochen; ab 3 Wochen darf die Schrift um 8 % schrumpfen, bevor eine Woche entfällt
+// Reihenfolge: mehr Wochen vor mehrzeilig vor größerer Schrift
+const fitFor=()=>{for(let W=ST.weeks;W>=2;W--)for(const f1 of ST.multi?[false,true]:[true])for(const sc of (W>=4?[1]:W===3?[1,.92]:[1,.92,.85,.78])){F1=f1;if(need(W,sc)<=53.45)return [W,sc]}F1=true;return [2,.78]};
+function build(){
+  const a0=S0(), [W,sc]=fitFor(), p=P[W]; ST.shown=W; ST.one=F1;
+  return hdr()+'<div class="tl" style="--rh:'+(p[0]*sc).toFixed(2)+'cqw;--rf:'+(p[1]*sc).toFixed(2)+'cqw;--ln:'+lanesIn(a0,W)+'"><div class="col">'+rng(0,W).map(k=>week(a0+7*k)).join('')+'</div></div>';}
+
+const FM={'4:3':{r:4/3,c:'p1',l:'4:3 iPhone'},'pair':{r:1.5,c:'p3',l:'Hochformat-Paar'},'3:2':{r:3/2,c:'p2',l:'3:2 Kamera'},'16:9':{r:16/9,c:'p3',l:'16:9'},
+  'portrait':{r:.75,c:'p4',l:'Einzeln Hochformat'},'1:1':{r:1,c:'p2',l:'Quadrat'}};
+const STY={dark:'Dunkel',glass:'Glas',light:'Hell'};
+const DAY={21:'Sa 21.',25:'Mi 25. (Urlaub)',27:'Fr 27. (Oma)',30:'Mo 30. (voll)'};
+const ST={fmt:'4:3',sty:'dark',day:21,weeks:4,edge:'softer',multi:1,rows:'zebra',shown:4};
+const sideOf=()=>25;
+// Verläufe mit sanfter Kurve (smoothstep), damit kein sichtbarer Knick entsteht
+const sm=t=>t*t*(3-2*t), N=8, ts=Array.from({length:N+1},(_,i)=>i/N);
+const stop=(a,p)=>'rgba(0,0,0,'+a.toFixed(3)+') '+p;
+const edgeX=(dir,w)=>'linear-gradient('+dir+','+ts.map(t=>stop(sm(t),(t*w).toFixed(2)+'cqw')).concat(ts.slice().reverse().map(t=>stop(sm(t),'calc(100% - '+(t*w).toFixed(2)+'cqw)'))).join(',')+')';
+const fadeOut=dir=>'linear-gradient('+dir+','+ts.map(t=>stop(1-sm(t),(t*100).toFixed(1)+'%')).join(',')+')';
+const maskCss=g=>'-webkit-mask-image:'+g+';mask-image:'+g+';-webkit-mask-composite:source-in;mask-composite:intersect;';
+const fit=(r,pr)=>r>=pr?{w:100,h:100*pr/r}:{w:100*r/pr,h:100};
+const PILL='<div class="pill">Sommer 2025  ·  Lena  ·  Lissabon</div>';
+
+function paint(tv,k){
+  const f=FM[k], side=sideOf(f.r), pr=(100-side)/56.25, s=fit(f.r,pr), two=k==='pair';
+  tv.className=tv.className.replace(/ ?sty-\w+/,'')+' sty-'+ST.sty; tv.style.gridTemplateColumns=(100-side)+'fr '+side+'fr';
+  const inner=two?'<div class="ph p3"></div><div class="ph p4"></div>':'<div class="ph '+f.c+'"></div>';
+  const hx=s.w<99.5, hy=s.h<99.5, fe={hard:0,soft:6,softer:10,mirror:3}[ST.edge];   // freie Achse? Verlaufsbreite in cqw
+  const MD={l:'to right',r:'to left',t:'to bottom',b:'to top'};                     // Richtung im gespiegelten Eigenkoordinatensystem
+  const mir=ST.edge==='mirror'?[hx&&'l',hx&&'r',hy&&'t',hy&&'b'].filter(Boolean).map(c=>'<div class="mir '+c+(two?' pair':'')+'" style="'+maskCss(fadeOut(MD[c]))+'">'+inner+'</div>').join(''):'';
+  const fm=[hx&&fe&&edgeX('to right',fe),hy&&fe&&edgeX('to bottom',fe)].filter(Boolean);
+  tv.innerHTML='<div class="ph blur '+f.c+'"></div><div class="pane"><div class="pv"><div class="ph blur '+f.c+'"></div><div class="fitw" style="width:'+s.w+'%;height:'+s.h+'%">'+mir+
+    '<div class="fit'+(two?' pair':'')+'" style="'+(fm.length?maskCss(fm.join(',')):'')+'">'+inner+'</div></div></div>'+PILL+'</div><aside class="side">'+build()+'</aside>';
+  return {side,photo:Math.round(s.w*s.h/100*(100-side)/100)};
+}
+function render(){
+  T=ST.day;
+  const m=paint(document.getElementById('main'),ST.fmt);
+  document.getElementById('note').innerHTML='<span><b>'+m.photo+' %</b> des Bildschirms zeigen das Foto</span><span>Leiste <b>'+m.side+' %</b> breit</span><span>Zeitstrahl: <b>'+ST.shown+' Wochen</b>'+(ST.multi&&ST.one?', Termine einzeilig wegen Platz':'')+'</span>';
+  document.querySelectorAll('.th').forEach(b=>{const r=paint(b.querySelector('.tv'),b.dataset.k);b.querySelector('small span:last-child').textContent=r.photo+' % Foto';b.setAttribute('aria-pressed',String(b.dataset.k===ST.fmt))});
+  document.querySelectorAll('.switch button').forEach(b=>b.setAttribute('aria-pressed',String(String(ST[b.dataset.g])===b.dataset.k)));
+}
+document.getElementById('thumbs').innerHTML=Object.entries(FM).map(([k,f])=>'<button class="th" data-k="'+k+'" aria-pressed="false"><div class="tv"></div><small><span>'+f.l+'</span><span></span></small></button>').join('');
+document.querySelectorAll('.th').forEach(b=>b.onclick=()=>{ST.fmt=b.dataset.k;render()});
+const sw=document.getElementById('switch');
+[['edge','Fotorand',{hard:'Hart',soft:'Weich',softer:'Sehr weich',mirror:'Gespiegelt'}],['multi','Mehrere Termine',{1:'Mehrzeilig',0:'Eine Zeile + n'}],['rows','Zeilen',{zebra:'Wechselnd',we:'Wochenende getönt'}],['weeks','Horizont bis',{3:'3 Wochen',4:'4 Wochen'}],['sty','Stil',STY],['day','Heute ist',DAY]].forEach(([g,label,opts])=>{
+  const d=document.createElement('div');d.className='grp';d.innerHTML='<span>'+label+'</span>';
+  Object.entries(opts).forEach(([k,l])=>{const b=document.createElement('button');b.textContent=l;b.dataset.g=g;b.dataset.k=k;
+    b.onclick=()=>{ST[g]=(g==='day'||g==='weeks'||g==='multi')?+k:k;render()};d.appendChild(b)});
+  sw.appendChild(d)});
+render();
+</script>

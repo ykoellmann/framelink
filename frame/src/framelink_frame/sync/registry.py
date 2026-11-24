@@ -51,3 +51,31 @@ def fetch_albums() -> list[RegistryAlbum]:
     albums = [RegistryAlbum(a) for a in resp.json().get("albums", [])]
     log.info("Registry returned %d album(s)", len(albums))
     return albums
+
+
+# The calendar functions take the config explicitly: the web UI re-reads config.yaml
+# on every request, so the module-level singleton would be stale there.
+
+def _registry_get(cfg, path: str, **params) -> httpx.Response:
+    resp = httpx.get(
+        f"{cfg.registry.url.rstrip('/')}{path}",
+        headers={"X-API-Key": cfg.registry.api_key},
+        params=params or None,
+        timeout=15,
+    )
+    resp.raise_for_status()
+    return resp
+
+
+def list_calendar_sources(cfg) -> list[dict]:
+    """All calendars the registry knows (id, name, kind, color, url_host, last_ok, error)."""
+    data = _registry_get(cfg, "/api/calendar/sources").json()
+    return data if isinstance(data, list) else data.get("sources", [])
+
+
+def fetch_calendar_entries(cfg, ids: list[str], start, end) -> dict:
+    """Entries of the given calendar ids between two dates (inclusive), as the registry returns them."""
+    return _registry_get(
+        cfg, "/api/calendar/entries",
+        **{"from": start.isoformat(), "to": end.isoformat(), "ids": ",".join(ids)},
+    ).json()

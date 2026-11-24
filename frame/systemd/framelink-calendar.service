@@ -1,0 +1,16 @@
+[Unit]
+Description=Framelink calendar sync
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=framelink
+EnvironmentFile=-/etc/framelink/env
+ExecStart=/opt/framelink/venv/bin/framelink-calendar
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=framelink-calendar
+TimeoutStartSec=60
+# Keep the display's fade smooth while this runs
+Nice=10

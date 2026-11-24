@@ -394,7 +394,7 @@ main {
   text-transform: uppercase;
   letter-spacing: 0.06em;
 }
-select, input[type="number"], input[type="time"] {
+select, input[type="number"], input[type="time"], input[type="text"], input[type="url"] {
   width: 100%;
   background: var(--bg-sunken);
   color: var(--text);
@@ -460,6 +460,24 @@ select:focus, input:focus {
   cursor: pointer;
   display: flex; align-items: center; justify-content: center;
 }
+
+/* ── Calendar ────────────────────────────────────────────────────────── */
+.cal-row { display: flex; align-items: center; gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--border-soft); }
+.cal-row:last-child { border-bottom: none; }
+.cal-dot { width: 12px; height: 12px; border-radius: 50%; flex-shrink: 0; background: var(--text-3); }
+.cal-main { flex: 1; min-width: 0; }
+.cal-name { font-weight: 600; font-size: 0.9rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cal-meta { font-size: 0.78rem; color: var(--text-3); margin-top: 2px; overflow-wrap: anywhere; }
+.cal-meta.err { color: var(--danger); }
+.cal-del {
+  width: 32px; height: 32px; flex-shrink: 0; border: none; border-radius: 6px;
+  background: var(--danger-tint); color: var(--danger); cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+}
+.cal-note { font-size: 0.78rem; color: var(--text-3); padding: 12px 0; }
+.cal-note.err { color: var(--danger); }
+.field input[type="text"], .field input[type="url"] { width: 100%; }
+.field input[type="color"] { width: 44px; height: 34px; padding: 0; border: 1.5px solid var(--border); border-radius: var(--radius-sm); background: none; }
 
 /* ── Toast ───────────────────────────────────────────────────────────── */
 .toast {
@@ -621,6 +639,98 @@ select:focus, input:focus {
     </div>
   </div>
 
+  <!-- Kalender ───────────────────────────────────────────────────────── -->
+  <div class="tab" id="tab-calendar">
+    <div class="card">
+      <div class="card-body">
+        <div class="row">
+          <div>
+            <div class="row-label">Kalender anzeigen</div>
+            <div class="row-sub" id="calStatus">Wird geladen…</div>
+          </div>
+          <label class="toggle"><input type="checkbox" id="calEnabled" data-cfg="enabled"><span class="toggle-track"></span></label>
+        </div>
+      </div>
+    </div>
+
+    <div class="section-label" style="margin-top:20px">Kalender</div>
+    <div class="card">
+      <div class="card-body" id="calList" style="padding-top:4px;padding-bottom:4px"></div>
+    </div>
+
+    <div class="section-label" style="margin-top:20px">Darstellung</div>
+    <div class="card">
+      <div class="card-body">
+        <div class="field">
+          <label for="calStyle">Stil</label>
+          <select id="calStyle" data-cfg="style">
+            <option value="dark">Dunkel</option>
+            <option value="glass">Glas</option>
+            <option value="light">Hell</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="calWeeks">Wochen</label>
+          <select id="calWeeks" data-cfg="horizon_weeks">
+            <option value="2">2</option>
+            <option value="3">3</option>
+            <option value="4">4</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="calEdge">Fotorand</label>
+          <select id="calEdge" data-cfg="edge">
+            <option value="hard">Hart</option>
+            <option value="soft">Weich</option>
+            <option value="softer">Weicher</option>
+            <option value="mirror">Spiegel</option>
+          </select>
+        </div>
+        <div class="row" style="padding-bottom:0">
+          <div>
+            <div class="row-label">Mehrzeilig</div>
+            <div class="row-sub">Bis zu zwei Einträge pro Tag</div>
+          </div>
+          <label class="toggle"><input type="checkbox" id="calMulti" data-cfg="multi_line"><span class="toggle-track"></span></label>
+        </div>
+      </div>
+    </div>
+
+    <div class="section-label" style="margin-top:20px">Kalender hinzufügen</div>
+    <div class="card">
+      <div class="card-body">
+        <div class="field">
+          <label for="calNewName">Name</label>
+          <input type="text" id="calNewName" maxlength="80" autocomplete="off">
+        </div>
+        <div class="field">
+          <label for="calNewUrl">Adresse (webcal:// oder https://)</label>
+          <input type="url" id="calNewUrl" autocomplete="off" autocapitalize="off" spellcheck="false">
+        </div>
+        <div class="field">
+          <label for="calNewKind">Typ</label>
+          <select id="calNewKind">
+            <option value="auto">Automatisch</option>
+            <option value="appointment">Termine</option>
+            <option value="birthday">Geburtstage</option>
+            <option value="holiday">Feiertage</option>
+            <option value="observance">Gedenktage</option>
+            <option value="vacation">Urlaub</option>
+            <option value="school_holiday">Schulferien</option>
+          </select>
+        </div>
+        <div class="row">
+          <div class="row-label">Eigene Farbe</div>
+          <div style="display:flex;align-items:center;gap:10px">
+            <input type="color" id="calNewColor" value="#4fd1c0" disabled>
+            <label class="toggle"><input type="checkbox" id="calNewColorOn"><span class="toggle-track"></span></label>
+          </div>
+        </div>
+        <button class="btn btn-primary btn-block" id="calAddBtn" data-action="add">Hinzufügen</button>
+      </div>
+    </div>
+  </div>
+
   <!-- System ─────────────────────────────────────────────────────────── -->
   <div class="tab" id="tab-system">
     <div class="section-label">Cache</div>
@@ -658,6 +768,10 @@ select:focus, input:focus {
     <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
     Zeitplan
   </button>
+  <button class="nav-btn" onclick="showTab('calendar',this)">
+    <svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+    Kalender
+  </button>
   <button class="nav-btn" onclick="showTab('system',this)">
     <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93A10 10 0 0 0 4.93 19.07M4.93 4.93a10 10 0 0 0 14.14 14.14"/></svg>
     System
@@ -672,6 +786,9 @@ async function api(path, opts = {}) {
   const res = await fetch(path, { headers: { "Content-Type": "application/json" }, ...opts });
   return res.json();
 }
+
+// Escape remote strings (album names, owners) before putting them into innerHTML.
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
 let _toastTimer;
 function toast(msg, dur = 2200) {
@@ -692,6 +809,7 @@ function showTab(name, btn) {
   if (name === "system")   loadStatus();
   if (name === "display")  loadDisplayConfig();
   if (name === "schedule") loadSchedule();
+  if (name === "calendar") loadCalendar();
 }
 
 // ── Remote ───────────────────────────────────────────────────────────
@@ -740,7 +858,7 @@ async function loadCurrent() {
     const parts = [];
     if (p.owner_first) parts.push(p.owner_first + (p.owner_last ? " " + p.owner_last : ""));
     if (p.captured_at) parts.push(new Date(p.captured_at).toLocaleDateString("de-DE", { day:"numeric", month:"long", year:"numeric" }));
-    metaEl.innerHTML = parts.map(t => `<span>${t}</span>`).join("");
+    metaEl.innerHTML = parts.map(t => `<span>${esc(t)}</span>`).join("");
   } catch { /* offline */ }
 }
 
@@ -781,11 +899,11 @@ async function loadAlbums() {
         <svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
       </div>
       <div style="flex:1;min-width:0">
-        <div class="album-name">${a.album_name || "Unbekanntes Album"}</div>
-        <div class="album-meta">${a.owner} · ${a.photo_count} Fotos</div>
+        <div class="album-name">${esc(a.album_name) || "Unbekanntes Album"}</div>
+        <div class="album-meta">${esc(a.owner)} · ${esc(a.photo_count)} Fotos</div>
       </div>
       <label class="toggle" style="flex-shrink:0">
-        <input type="checkbox" ${a.enabled ? "checked" : ""} onchange="toggleAlbum('${a.token}', this.checked)">
+        <input type="checkbox" ${a.enabled ? "checked" : ""} onchange="toggleAlbum('${esc(a.token)}', this.checked)">
         <span class="toggle-track"></span>
       </label>
     </div>
@@ -799,7 +917,7 @@ async function toggleAlbum(token, enabled) {
   // update local state
   const album = _albumData.find(a => a.token === token);
   if (album) album.enabled = enabled;
-  await api("/api/config/filters", "POST", { excluded_albums: excluded });
+  await api("/api/config/filters", { method: "POST", body: JSON.stringify({ excluded_albums: excluded }) });
 }
 
 // ── Display config ───────────────────────────────────────────────────
@@ -867,6 +985,120 @@ async function saveSchedule() {
   await api("/api/config/schedule", { method: "POST", body: JSON.stringify({ active_periods: _periods }) });
   toast("Zeitplan gespeichert");
 }
+
+// ── Calendar ─────────────────────────────────────────────────────────
+const CAL_KINDS = { auto: "Automatisch", appointment: "Termine", birthday: "Geburtstage", holiday: "Feiertage",
+                    observance: "Gedenktage", vacation: "Urlaub", school_holiday: "Schulferien" };
+let _cal = null;
+
+function ago(when) {   // ISO string or epoch seconds
+  const t = typeof when === "number" ? when * 1000 : Date.parse(when);
+  if (!t) return "nie";
+  const m = Math.max(0, Math.round((Date.now() - t) / 60000));
+  if (m < 2) return "gerade eben";
+  if (m < 60) return `vor ${m} Min.`;
+  if (m < 2880) return `vor ${Math.round(m / 60)} Std.`;
+  return `vor ${Math.round(m / 1440)} Tagen`;
+}
+
+async function loadCalendar() {
+  let d;
+  try { d = await api("/api/calendar"); } catch { toast("Kalender nicht ladbar"); return; }
+  _cal = d;
+  const c = d.config;
+  document.getElementById("calEnabled").checked = c.enabled;
+  document.getElementById("calStyle").value     = c.style;
+  document.getElementById("calWeeks").value     = c.horizon_weeks;
+  document.getElementById("calEdge").value      = c.edge;
+  document.getElementById("calMulti").checked   = c.multi_line;
+
+  const n = c.ids.length;
+  let status = n ? `${n} Kalender gewählt` : "Kein Kalender gewählt";
+  if (d.calendar_mtime) status += ` · Stand ${ago(d.calendar_mtime)}`;
+  if (!d.registry_ok) status += " · Registry nicht erreichbar";
+  document.getElementById("calStatus").textContent = status;
+
+  const el = document.getElementById("calList");
+  if (!d.registry_ok) {
+    el.innerHTML = '<div class="cal-note err">Die Registry ist nicht erreichbar. Die gespeicherte Auswahl bleibt erhalten.</div>';
+  } else if (!d.calendars.length) {
+    el.innerHTML = '<div class="cal-note">Noch keine Kalender. Füge unten einen hinzu.</div>';
+  } else {
+    el.innerHTML = d.calendars.map(k => {
+      const meta = [CAL_KINDS[k.kind] || k.kind, k.url_host, k.error ? "" : "aktualisiert " + ago(k.last_ok)].filter(Boolean).join(" · ");
+      return `
+      <div class="cal-row">
+        <span class="cal-dot" style="${k.color ? `background:${esc(k.color)}` : ""}"></span>
+        <div class="cal-main">
+          <div class="cal-name">${esc(k.name)}</div>
+          <div class="cal-meta">${esc(meta)}</div>
+          ${k.error ? `<div class="cal-meta err">Fehler: ${esc(k.error)}</div>` : ""}
+        </div>
+        <label class="toggle">
+          <input type="checkbox" data-action="select" data-id="${esc(k.id)}" ${k.selected ? "checked" : ""}>
+          <span class="toggle-track"></span>
+        </label>
+        <button class="cal-del" data-action="delete" data-id="${esc(k.id)}" title="Löschen" aria-label="Kalender löschen">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>`;
+    }).join("");
+  }
+}
+
+async function saveCalendarCfg(patch) {
+  const r = await api("/api/config/calendar", { method: "POST", body: JSON.stringify(patch) });
+  toast(r.error ? "Fehler: " + r.error : "Gespeichert", r.error ? 3500 : 2200);
+  await loadCalendar();
+}
+
+async function addCalendar() {
+  const body = {
+    name: document.getElementById("calNewName").value.trim(),
+    url:  document.getElementById("calNewUrl").value.trim(),
+    kind: document.getElementById("calNewKind").value,
+  };
+  if (document.getElementById("calNewColorOn").checked) body.color = document.getElementById("calNewColor").value;
+  if (!body.name || !body.url) { toast("Name und Adresse eingeben"); return; }
+  const btn = document.getElementById("calAddBtn");
+  btn.disabled = true;
+  try {
+    const r = await api("/api/calendar/sources", { method: "POST", body: JSON.stringify(body) });
+    if (r.error) { toast("Fehler: " + r.error, 4000); return; }
+    document.getElementById("calNewName").value = "";
+    document.getElementById("calNewUrl").value = "";
+    toast("Kalender hinzugefügt");
+    await loadCalendar();
+  } finally { btn.disabled = false; }
+}
+
+async function deleteCalendar(id) {
+  const k = _cal?.calendars.find(x => x.id === id);
+  if (!confirm(`„${k ? k.name : "Kalender"}“ für alle Rahmen entfernen?`)) return;
+  const r = await api("/api/calendar/sources/" + encodeURIComponent(id), { method: "DELETE" });
+  toast(r.error ? "Fehler: " + r.error : "Kalender entfernt", r.error ? 3500 : 2200);
+  await loadCalendar();
+}
+
+const _calTab = document.getElementById("tab-calendar");
+_calTab.addEventListener("change", e => {
+  const t = e.target;
+  if (t.id === "calNewColorOn") { document.getElementById("calNewColor").disabled = !t.checked; return; }
+  if (t.dataset.action === "select") {
+    const ids = new Set(_cal.config.ids);
+    t.checked ? ids.add(t.dataset.id) : ids.delete(t.dataset.id);
+    saveCalendarCfg({ ids: [...ids] });
+  } else if (t.dataset.cfg) {
+    const f = t.dataset.cfg;
+    saveCalendarCfg({ [f]: t.type === "checkbox" ? t.checked : f === "horizon_weeks" ? +t.value : t.value });
+  }
+});
+_calTab.addEventListener("click", e => {
+  const b = e.target.closest("[data-action]");
+  if (!b) return;
+  if (b.dataset.action === "delete") deleteCalendar(b.dataset.id);
+  if (b.dataset.action === "add") addCalendar();
+});
 
 // ── Init ─────────────────────────────────────────────────────────────
 if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js");

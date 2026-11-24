@@ -97,6 +97,16 @@ class GeocodingConfig(BaseModel):
     user_agent: str = "framelink/0.1"
 
 
+class CalendarConfig(BaseModel):
+    enabled: bool = False   # False = full-screen photos as before
+    ids: list[str] = Field(default_factory=list)   # registry calendar ids shown on this frame (opt-in)
+    timezone: str = "Europe/Berlin"   # decides what "today" is; keep equal to the registry's FRAMELINK_TIMEZONE
+    style: Literal["dark", "glass", "light"] = "dark"
+    horizon_weeks: int = Field(4, ge=2, le=4)   # at most this many weeks; fewer if they do not fit
+    multi_line: bool = True
+    edge: Literal["hard", "soft", "softer", "mirror"] = "softer"
+
+
 # ---------------------------------------------------------------------------
 # Root config
 # ---------------------------------------------------------------------------
@@ -111,6 +121,7 @@ class Config(BaseModel):
     filters: FiltersConfig = Field(default_factory=FiltersConfig)
     sync: SyncConfig = Field(default_factory=SyncConfig)
     geocoding: GeocodingConfig = Field(default_factory=GeocodingConfig)
+    calendar: CalendarConfig = Field(default_factory=CalendarConfig)
 
     @model_validator(mode="after")
     def compute_sync_interval(self) -> "Config":

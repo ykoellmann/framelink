@@ -79,8 +79,9 @@ def draw_overlay(
     screen_w: int,
     screen_h: int,
     all_metadata: dict[str, PhotoMeta] | None = None,
+    area_w: int | None = None,
 ) -> None:
-    """Draw the metadata overlay onto *surface* in-place."""
+    """Draw the metadata overlay onto *surface* in-place, centred in the first *area_w* pixels (default: whole screen)."""
     if not _cfg_mod.config.overlay.enabled:
         return
 
@@ -115,7 +116,7 @@ def draw_overlay(
     radius = box_h // 2  # full pill shape
 
     # Center horizontally; position near bottom
-    box_x = (screen_w - box_w) // 2
+    box_x = ((area_w or screen_w) - box_w) // 2
     margin = int(screen_h * _MARGIN_BOTTOM_RATIO)
     if _cfg_mod.config.overlay.position == "bottom":
         box_y = screen_h - box_h - margin

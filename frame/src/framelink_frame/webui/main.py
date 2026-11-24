@@ -10,21 +10,27 @@ from __future__ import annotations
 import json
 import logging
 import os
+import threading
 from datetime import datetime
 from pathlib import Path
 
+import httpx
 import yaml
 from flask import Flask, jsonify, render_template, request, send_from_directory
+from pydantic import ValidationError
 
-from ..config import Config, load_config, config as _startup_config
-from ..sync.cache import load_queue, load_metadata, cache_size_mb, images_dir
+from .. import ipc
+from ..config import CalendarConfig, Config, load_config, config as _startup_config
+from ..sync import calendar_sync
+from ..sync.cache import load_queue, load_metadata, cache_size_mb, images_dir, calendar_path
+from ..sync.registry import list_calendar_sources
 
 log = logging.getLogger(__name__)
 
 app = Flask(__name__, template_folder="templates", static_folder="static")
 
 _CONFIG_PATH = Path(os.environ.get("FRAMELINK_CONFIG", "/etc/framelink/config.yaml"))
-_CMD_FILE = Path("/tmp/frame-cmd")
+_CMD_FILE = ipc.cmd_file()
 _SYNC_SERVICE = "framelink-sync.service"
 
 
@@ -92,14 +98,14 @@ def api_status():
 
 @app.route("/api/remote/<cmd>", methods=["POST"])
 def api_remote(cmd: str):
-    allowed = {"next", "pause", "reload-queue"}
+    allowed = {"next", "pause", "reload-queue", "reload-calendar"}
     if cmd not in allowed:
         return jsonify({"error": "unknown command"}), 400
     _write_cmd(cmd)
     return jsonify({"ok": True, "cmd": cmd})
 
 
-_CURRENT_FILE = Path("/tmp/frame-current")
+_CURRENT_FILE = ipc.current_file()
 
 @app.route("/api/remote/current")
 def api_current():
@@ -230,15 +236,134 @@ def api_filters():
     return jsonify({"ok": True})
 
 
+# ─── API: Calendar ────────────────────────────────────────────────────────────
+
+def _sync_calendar(cfg: Config) -> None:
+    try:
+        if calendar_sync.run_once(cfg):
+            _write_cmd("reload-calendar")
+    except Exception:
+        log.exception("Calendar sync from web UI failed")
+
+
+def _start_calendar_sync(cfg: Config) -> None:
+    # Own thread: the registry can be slow and the request must not wait for it.
+    threading.Thread(target=_sync_calendar, args=(cfg,), daemon=True).start()
+
+
+def _registry_call(cfg: Config, method: str, path: str, **kw) -> httpx.Response:
+    """Call the registry with the frame's key (never returned to the browser); raises httpx.HTTPError."""
+    resp = httpx.request(
+        method, f"{cfg.registry.url.rstrip('/')}{path}",
+        headers={"X-API-Key": cfg.registry.api_key}, timeout=5, **kw,
+    )
+    resp.raise_for_status()
+    return resp
+
+
+def _upstream_error(exc: httpx.HTTPError):
+    detail = "Registry nicht erreichbar"
+    if isinstance(exc, httpx.HTTPStatusError):
+        try:
+            d = exc.response.json().get("detail")
+        except Exception:
+            d = None
+        detail = d if isinstance(d, str) else f"Registry antwortet mit {exc.response.status_code}"
+    log.warning("Registry call failed: %s", exc)
+    return jsonify({"error": detail}), 502
+
+
+def _set_calendar(cfg: Config, new: CalendarConfig) -> None:
+    old = cfg.calendar
+    _save_config(cfg.model_copy(update={"calendar": new}))
+    if (old.ids, old.enabled) != (new.ids, new.enabled):
+        _start_calendar_sync(cfg.model_copy(update={"calendar": new}))
+
+
+@app.route("/api/calendar")
+def api_calendar():
+    cfg = _current_config()
+    selected = set(cfg.calendar.ids)
+    try:
+        calendars = [
+            {"id": s["id"], "name": s["name"], "kind": s["kind"], "color": s.get("color"),
+             "url_host": s.get("url_host"), "last_ok": s.get("last_ok"),
+             "error": s.get("last_error", s.get("error")), "selected": s["id"] in selected}
+            for s in list_calendar_sources(cfg)
+        ]
+        registry_ok = True
+    except Exception as e:  # saved ids stay untouched
+        log.warning("Registry unreachable: %s", e)
+        calendars, registry_ok = [], False
+    try:
+        mtime = calendar_path().stat().st_mtime
+    except OSError:
+        mtime = None
+    return jsonify({"config": cfg.calendar.model_dump(), "calendars": calendars,
+                    "registry_ok": registry_ok, "calendar_mtime": mtime})
+
+
+@app.route("/api/config/calendar", methods=["POST"])
+def api_config_calendar():
+    body = request.get_json(force=True, silent=True)
+    if not isinstance(body, dict):
+        return jsonify({"error": "JSON-Objekt erwartet"}), 400
+    cfg = _current_config()
+    try:
+        new = CalendarConfig.model_validate({**cfg.calendar.model_dump(), **body})
+    except ValidationError as e:
+        msg = "; ".join(f"{'.'.join(map(str, x['loc']))}: {x['msg']}" for x in e.errors())
+        return jsonify({"error": msg}), 400
+    _set_calendar(cfg, new)
+    return jsonify({"ok": True, "config": new.model_dump()})
+
+
+@app.route("/api/calendar/sources", methods=["POST"])
+def api_calendar_add():
+    body = request.get_json(force=True, silent=True)
+    if not isinstance(body, dict):
+        return jsonify({"error": "JSON-Objekt erwartet"}), 400
+    payload = {k: body[k] for k in ("name", "url", "kind", "color") if body.get(k)}
+    try:
+        resp = _registry_call(_current_config(), "POST", "/api/calendar/sources", json=payload)
+    except httpx.HTTPError as e:
+        return _upstream_error(e)
+    return jsonify(resp.json()), 201
+
+
+@app.route("/api/calendar/sources/<source_id>", methods=["DELETE"])
+def api_calendar_delete(source_id: str):
+    cfg = _current_config()
+    try:
+        _registry_call(cfg, "DELETE", f"/api/calendar/sources/{source_id}")
+    except httpx.HTTPStatusError as e:
+        if e.response.status_code != 404:   # already gone: still clean up the local selection
+            return _upstream_error(e)
+    except httpx.HTTPError as e:
+        return _upstream_error(e)
+    if source_id in cfg.calendar.ids:
+        ids = [i for i in cfg.calendar.ids if i != source_id]
+        _set_calendar(cfg, cfg.calendar.model_copy(update={"ids": ids}))
+    return jsonify({"ok": True})
+
+
 # ─── API: Sync ────────────────────────────────────────────────────────────────
 
 @app.route("/api/sync", methods=["POST"])
 def api_sync():
-    """Trigger a manual sync via systemd (requires sudo or same-user permissions)."""
+    """Trigger a manual sync via systemd (install.sh adds the matching sudoers rule).
+    Without systemd (Docker image) the sync loop is asked through a trigger file instead."""
+    import shutil
     import subprocess
+    if not shutil.which("systemctl"):
+        try:
+            ipc.sync_trigger_file().touch()
+            return jsonify({"ok": True})
+        except OSError as e:
+            return jsonify({"error": str(e)}), 500
     try:
         subprocess.run(
-            ["systemctl", "start", _SYNC_SERVICE],
+            ["sudo", "-n", "/bin/systemctl", "start", _SYNC_SERVICE],
             check=True, timeout=5,
         )
         return jsonify({"ok": True})

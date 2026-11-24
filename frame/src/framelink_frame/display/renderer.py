@@ -20,10 +20,24 @@ from PIL import Image, ImageFilter
 log = logging.getLogger(__name__)
 
 
-def _load_pil(path: str | Path) -> Image.Image:
+def _load_pil(path: str | Path, fit: tuple[int, int] | None = None) -> Image.Image:
+    """
+    Load a photo as RGB. With *fit* = (box_w, box_h) the JPEG is decoded at a
+    reduced size (Pillow's draft mode, DCT scaling) that is still at least as
+    large as the photo will be once fitted into that box. This saves time and
+    memory on the Pi; without *fit* the full image is decoded.
+    """
     img = Image.open(path)
+    if fit:
+        pw, ph = img.size
+        scale = min(fit[0] / pw, fit[1] / ph)
+        if scale < 1:
+            img.draft("RGB", (int(pw * scale) + 1, int(ph * scale) + 1))
     img.load()
     return img.convert("RGB")
+
+
+_BLUR_DIV = 8   # blur at 1/8 size: far fewer pixels, and the result is just as soft
 
 
 def _blurred_fill(photo: Image.Image, target_w: int, target_h: int) -> Image.Image:
@@ -31,8 +45,12 @@ def _blurred_fill(photo: Image.Image, target_w: int, target_h: int) -> Image.Ima
     Create a blurred, slightly-darkened version of photo scaled to (target_w, target_h).
     Used as background for non-16:9 photos.
     """
-    bg = photo.resize((target_w, target_h), Image.LANCZOS)
-    bg = bg.filter(ImageFilter.GaussianBlur(radius=30))
+    small = photo.resize(
+        (max(1, target_w // _BLUR_DIV), max(1, target_h // _BLUR_DIV)),
+        Image.BILINEAR, reducing_gap=2.0,
+    )
+    small = small.filter(ImageFilter.GaussianBlur(radius=30 / _BLUR_DIV))
+    bg = small.resize((target_w, target_h), Image.BICUBIC)
     # Darken so the sharp foreground photo pops
     return bg.point(lambda p: int(p * 0.5))
 
@@ -63,7 +81,7 @@ def render_single(
     fill_mode: str = "blurred",
 ) -> Image.Image:
     """Render one photo onto a (screen_w × screen_h) canvas."""
-    photo = _load_pil(photo_path)
+    photo = _load_pil(photo_path, fit=(screen_w, screen_h))
     canvas = Image.new("RGB", (screen_w, screen_h), (0, 0, 0))
 
     if fill_mode == "blurred":
@@ -94,8 +112,8 @@ def render_pair(
     """
     half_w = screen_w // 2
 
-    left_photo  = _load_pil(left_path)
-    right_photo = _load_pil(right_path)
+    left_photo  = _load_pil(left_path, fit=(half_w, screen_h))
+    right_photo = _load_pil(right_path, fit=(half_w, screen_h))
 
     canvas = Image.new("RGB", (screen_w, screen_h), (0, 0, 0))
 

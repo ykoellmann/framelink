@@ -1,0 +1,10 @@
+[Unit]
+Description=Framelink calendar sync timer
+Requires=framelink-calendar.service
+
+[Timer]
+OnBootSec=45s
+OnUnitActiveSec=30min
+
+[Install]
+WantedBy=timers.target

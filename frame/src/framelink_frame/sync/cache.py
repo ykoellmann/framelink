@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 from pathlib import Path
 
 from ..config import config
@@ -70,10 +71,56 @@ def load_queue() -> list[Slot]:
         return []
 
 
+def atomic_write_text(path: Path, text: str) -> None:
+    """Write via a temp file + rename so a reader never sees a half-written file."""
+    tmp = path.with_name(path.name + ".tmp")
+    tmp.write_text(text)
+    os.replace(tmp, path)
+
+
 def save_queue(slots: list[Slot]) -> None:
-    path = _cache_dir() / _QUEUE_FILE
-    path.write_text(json.dumps(slots, indent=2))
+    atomic_write_text(_cache_dir() / _QUEUE_FILE, json.dumps(slots, indent=2))
     log.info("Queue saved: %d slot(s)", len(slots))
+
+
+# ---------------------------------------------------------------------------
+# Calendar store (written by the calendar sync, read by the display)
+# ---------------------------------------------------------------------------
+
+_CALENDAR_FILE = "calendar.json"
+
+
+def calendar_path() -> Path:
+    return _cache_dir() / _CALENDAR_FILE
+
+
+def load_calendar() -> dict | None:
+    """Return the cached calendar payload, or None if there is none yet or it is unreadable."""
+    try:
+        return json.loads(calendar_path().read_text())
+    except FileNotFoundError:
+        return None
+    except Exception:
+        log.exception("Failed to load calendar.json")
+        return None
+
+
+def save_calendar(data: dict) -> bool:
+    """
+    Store the calendar payload atomically. An unchanged payload is not rewritten,
+    so the display (which watches the file's mtime) does not re-render for nothing.
+    Returns True if the file changed.
+    """
+    text = json.dumps(data, indent=2, sort_keys=True, ensure_ascii=False)
+    path = calendar_path()
+    try:
+        if path.read_text() == text:
+            return False
+    except FileNotFoundError:
+        pass
+    atomic_write_text(path, text)
+    log.info("Calendar saved: %d entr(ies)", len(data.get("entries", [])))
+    return True
 
 
 # ---------------------------------------------------------------------------

@@ -16,16 +16,20 @@ dependencies = [
     "aiosqlite>=0.20",
     "httpx>=0.27",
     "apscheduler>=3.10",
+    "icalendar>=6",
+    "recurring-ical-events>=3",
+    "tzdata",
 ]
 
 [project.optional-dependencies]
 postgres = [
-    "psycopg[async]>=3.1",
+    "asyncpg>=0.29",
 ]
 dev = [
     "pytest>=8",
     "pytest-asyncio>=0.23",
     "httpx>=0.27",  # TestClient
+    "respx>=0.21",
 ]
 
 [tool.hatch.build.targets.wheel]
@@ -33,3 +37,4 @@ packages = ["src/framelink_registry"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
