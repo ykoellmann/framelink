@@ -2,10 +2,19 @@
 # Framelink frame installer — run as root on a Raspberry Pi Zero 2W
 # Raspberry Pi OS Lite 64-bit (Bookworm) recommended
 #
-# Usage:
-#   sudo bash install.sh
-#   sudo bash install.sh --no-cec        # skip cec-utils
-#   sudo bash install.sh --dev           # install into current directory (no /opt)
+# Install or update from the latest GitHub release (no clone needed):
+#   curl -fsSL https://github.com/ykoellmann/framelink/releases/latest/download/install.sh | sudo bash
+#   curl -fsSL …/install.sh | sudo FRAMELINK_VERSION=v0.2.0 bash     # a specific version
+# Later updates: sudo framelink-update [vX.Y.Z]
+#
+# From a clone (developers):
+#   sudo bash frame/install.sh
+#   sudo bash frame/install.sh --no-cec        # skip cec-utils
+#   sudo bash frame/install.sh --no-systemd    # do not touch systemd (container tests)
+#   sudo bash frame/install.sh --dev           # install into the clone's own folder (no /opt)
+#
+# Environment: FRAMELINK_VERSION (default "latest"), FRAMELINK_RELEASE_BASE (default the
+# GitHub releases URL; a file:// URL works for offline tests).
 
 set -euo pipefail
 
@@ -15,14 +24,23 @@ CONFIG_DIR="/etc/framelink"
 DATA_DIR="/var/lib/framelink/cache"
 VENV="$INSTALL_DIR/venv"
 SERVICE_USER="framelink"
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+RELEASE_BASE="${FRAMELINK_RELEASE_BASE:-https://github.com/ykoellmann/framelink/releases}"
+VERSION="${FRAMELINK_VERSION:-latest}"
+# Empty when the script is piped from curl: it then has no files next to it and downloads the release first.
+SCRIPT_DIR=""
+if [[ -n "${BASH_SOURCE[0]:-}" && -f "${BASH_SOURCE[0]}" ]]; then
+  SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+fi
 
+ARGS=("$@")
 OPT_NO_CEC=0
+OPT_NO_SYSTEMD=0
 OPT_DEV=0
 for arg in "$@"; do
   case $arg in
-    --no-cec) OPT_NO_CEC=1 ;;
-    --dev)    OPT_DEV=1; INSTALL_DIR="$SCRIPT_DIR"; VENV="$SCRIPT_DIR/.venv" ;;
+    --no-cec)     OPT_NO_CEC=1 ;;
+    --no-systemd) OPT_NO_SYSTEMD=1 ;;
+    --dev)        OPT_DEV=1; INSTALL_DIR="$SCRIPT_DIR"; VENV="$SCRIPT_DIR/.venv" ;;
   esac
 done
 
@@ -36,8 +54,44 @@ require_root() {
   [[ $EUID -eq 0 ]] || die "Run as root: sudo bash install.sh"
 }
 
+# Run a systemctl command unless --no-systemd was given
+sctl() { [[ $OPT_NO_SYSTEMD -eq 1 ]] || systemctl "$@"; }
+
 # ── Preflight ─────────────────────────────────────────────────────────────────
 require_root
+
+# ── Standalone start (curl | bash, or a lone install.sh): fetch the release, run its install.sh ──
+# Everything below this block needs the files that ship in the release archive (wheel, systemd units, config example).
+if [[ -z "$SCRIPT_DIR" || ! -d "$SCRIPT_DIR/systemd" ]]; then
+  command -v curl >/dev/null 2>&1 || {
+    apt-get update -qq && apt-get install -y --no-install-recommends curl ca-certificates
+  }
+  if [[ "$VERSION" == "latest" ]]; then
+    URL="$RELEASE_BASE/latest/download/framelink-frame.tar.gz"
+  else
+    URL="$RELEASE_BASE/download/$VERSION/framelink-frame.tar.gz"
+  fi
+  WORK="$(mktemp -d)"
+  trap 'rm -rf "$WORK"' EXIT
+  info "Downloading $URL"
+  curl -fsSL "$URL" -o "$WORK/framelink-frame.tar.gz" || die "Download failed: $URL"
+  tar -xzf "$WORK/framelink-frame.tar.gz" -C "$WORK"
+  [[ -f "$WORK/framelink-frame/install.sh" ]] || die "Release archive has an unexpected layout"
+  # stdin from /dev/null: this script itself may be coming in on stdin (curl | bash)
+  bash "$WORK/framelink-frame/install.sh" ${ARGS[@]+"${ARGS[@]}"} </dev/null
+  exit $?
+fi
+
+# Release mode = a built wheel sits next to this script (the release archive); otherwise we are in a clone.
+shopt -s nullglob
+WHEELS=("$SCRIPT_DIR"/framelink_frame-*.whl)
+shopt -u nullglob
+FROM_RELEASE=0
+[[ ${#WHEELS[@]} -gt 0 && $OPT_DEV -eq 0 ]] && FROM_RELEASE=1
+
+# An existing installation is updated in place: config is kept, services are restarted at the end.
+UPDATING=0
+[[ -x "$VENV/bin/framelink-display" ]] && UPDATING=1
 
 info "Framelink frame installer starting"
 info "Install dir : $INSTALL_DIR"
@@ -63,6 +117,8 @@ PKGS=(
   avahi-daemon
   # Network
   curl
+  # The web UI's "sync now" button starts the sync via sudo (rule installed below)
+  sudo
 )
 
 if [[ $OPT_NO_CEC -eq 0 ]]; then
@@ -96,7 +152,12 @@ python3 -m venv "$VENV"
 
 info "Installing framelink-frame…"
 "$VENV/bin/pip" install --quiet --upgrade pip
-"$VENV/bin/pip" install --quiet -e "$SCRIPT_DIR[display,webui]"
+if [[ $FROM_RELEASE -eq 1 ]]; then
+  info "From release wheel ${WHEELS[0]##*/}"
+  "$VENV/bin/pip" install --quiet --upgrade "${WHEELS[0]}[display,webui]"
+else
+  "$VENV/bin/pip" install --quiet -e "$SCRIPT_DIR[display,webui]"
+fi
 success "Python package installed"
 
 # ── Config file ───────────────────────────────────────────────────────────────
@@ -104,14 +165,16 @@ CONFIG_FILE="$CONFIG_DIR/config.yaml"
 if [[ ! -f "$CONFIG_FILE" ]]; then
   info "Installing default config to $CONFIG_FILE…"
   cp "$SCRIPT_DIR/config.yaml.example" "$CONFIG_FILE"
-  chmod 640 "$CONFIG_FILE"
-  chown root:"$SERVICE_USER" "$CONFIG_FILE"
   warn "Edit $CONFIG_FILE before starting services:"
   warn "  registry.url     — URL your registry is reachable at"
   warn "  registry.api_key — matching FRAMELINK_API_KEY from the registry"
 else
   info "Config already exists at $CONFIG_FILE — not overwriting"
 fi
+# The web UI runs as $SERVICE_USER and saves settings here, so the group needs write access.
+# Applied on every run so existing installs (which had 640) are fixed too.
+chmod 660 "$CONFIG_FILE"
+chown root:"$SERVICE_USER" "$CONFIG_FILE"
 
 # ── Env file (API key passthrough) ────────────────────────────────────────────
 ENV_FILE="$CONFIG_DIR/env"
@@ -129,7 +192,7 @@ fi
 # ── systemd units ─────────────────────────────────────────────────────────────
 info "Installing systemd units…"
 UNIT_DIR="/etc/systemd/system"
-UNITS=(framelink-sync.service framelink-sync.timer framelink-display.service framelink-webui.service)
+UNITS=(framelink-sync.service framelink-sync.timer framelink-calendar.service framelink-calendar.timer framelink-display.service framelink-webui.service)
 
 for unit in "${UNITS[@]}"; do
   src="$SCRIPT_DIR/systemd/$unit"
@@ -143,7 +206,7 @@ for unit in "${UNITS[@]}"; do
   chmod 644 "$dst"
 done
 
-systemctl daemon-reload
+sctl daemon-reload
 success "systemd units installed"
 
 # ── avahi hostname ────────────────────────────────────────────────────────────
@@ -156,7 +219,7 @@ if [[ "$CURRENT_HOST" != "bilderrahmen" ]]; then
   # Update /etc/hosts
   sed -i "s/127\.0\.1\.1.*/127.0.1.1\tbilderrahmen/" /etc/hosts 2>/dev/null || true
 fi
-systemctl enable --now avahi-daemon 2>/dev/null || true
+sctl enable --now avahi-daemon 2>/dev/null || true
 
 # ── CEC helper scripts ────────────────────────────────────────────────────────
 if [[ $OPT_NO_CEC -eq 0 ]] && command -v cec-client &>/dev/null; then
@@ -179,22 +242,48 @@ fi
 # ── Sudoers for web UI sync trigger ──────────────────────────────────────────
 SUDOERS_FILE="/etc/sudoers.d/framelink"
 if [[ ! -f "$SUDOERS_FILE" ]]; then
+  mkdir -p /etc/sudoers.d
   echo "$SERVICE_USER ALL=(root) NOPASSWD: /bin/systemctl start framelink-sync.service" \
     > "$SUDOERS_FILE"
   chmod 440 "$SUDOERS_FILE"
   info "Sudoers rule added: $SERVICE_USER can start framelink-sync"
 fi
 
+# ── Update command (release installs only) ───────────────────────────────────
+if [[ $FROM_RELEASE -eq 1 ]]; then
+  cat > /usr/local/bin/framelink-update <<EOF
+#!/usr/bin/env bash
+# Update Framelink to the latest release, or to a given one: framelink-update [vX.Y.Z]
+set -euo pipefail
+[[ \$EUID -eq 0 ]] || exec sudo -E "\$0" "\$@"
+BASE="\${FRAMELINK_RELEASE_BASE:-$RELEASE_BASE}"
+VERSION="\${1:-\${FRAMELINK_VERSION:-latest}}"
+if [[ "\$VERSION" == latest ]]; then URL="\$BASE/latest/download/install.sh"; else URL="\$BASE/download/\$VERSION/install.sh"; fi
+curl -fsSL "\$URL" | FRAMELINK_VERSION="\$VERSION" FRAMELINK_RELEASE_BASE="\$BASE" bash
+EOF
+  chmod +x /usr/local/bin/framelink-update
+  info "Update later with: sudo framelink-update"
+fi
+
 # ── Summary ───────────────────────────────────────────────────────────────────
 echo
-success "Installation complete."
-echo
-echo "  Next steps:"
-echo "  1. Edit config:   sudo nano $CONFIG_FILE"
-echo "  2. Start services:"
-echo "     sudo systemctl enable --now framelink-display framelink-webui framelink-sync.timer"
-echo "  3. Check logs:    journalctl -u framelink-display -f"
-echo "  4. Web UI:        http://bilderrahmen.local:5000"
+if [[ $UPDATING -eq 1 ]]; then
+  # Running services pick up the new code; the calendar timer is new for installs that predate it.
+  sctl try-restart framelink-display framelink-webui 2>/dev/null || true
+  if systemctl is-enabled --quiet framelink-sync.timer 2>/dev/null && [[ $OPT_NO_SYSTEMD -eq 0 ]]; then
+    systemctl enable --now framelink-calendar.timer 2>/dev/null || true
+  fi
+  success "Update complete (config kept)."
+else
+  success "Installation complete."
+  echo
+  echo "  Next steps:"
+  echo "  1. Edit config:   sudo nano $CONFIG_FILE"
+  echo "  2. Start services:"
+  echo "     sudo systemctl enable --now framelink-display framelink-webui framelink-sync.timer framelink-calendar.timer"
+  echo "  3. Check logs:    journalctl -u framelink-display -f"
+  echo "  4. Web UI:        http://bilderrahmen.local:5000"
+fi
 echo
 if [[ "$CURRENT_HOST" != "bilderrahmen" ]]; then
   warn "Hostname changed — reboot recommended: sudo reboot"

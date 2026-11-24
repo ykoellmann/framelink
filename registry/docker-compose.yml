@@ -1,6 +1,8 @@
 services:
   registry:
-    build: .
+    # Pre-built image from GHCR. To build locally instead (development):
+    #   docker compose -f docker-compose.yml -f docker-compose.build.yml up --build
+    image: ghcr.io/ykoellmann/framelink-registry:${FRAMELINK_REGISTRY_TAG:-latest}
     restart: unless-stopped
     ports:
       - "8000:8000"
@@ -11,6 +13,17 @@ services:
       # For an existing PostgreSQL instance on the Pi:
       #   FRAMELINK_DATABASE_URL: postgresql://user:password@host/framelink
       FRAMELINK_DATABASE_URL: ${FRAMELINK_DATABASE_URL:-sqlite+aiosqlite:///./data/framelink.db}
+      # Calendar sidebar (all optional)
+      FRAMELINK_TIMEZONE: ${FRAMELINK_TIMEZONE:-Europe/Berlin}
+      FRAMELINK_CALENDAR_REFRESH_INTERVAL_MINUTES: ${FRAMELINK_CALENDAR_REFRESH_INTERVAL_MINUTES:-30}
+      FRAMELINK_CALENDAR_WINDOW_BACK_DAYS: ${FRAMELINK_CALENDAR_WINDOW_BACK_DAYS:-14}
+      FRAMELINK_CALENDAR_WINDOW_AHEAD_DAYS: ${FRAMELINK_CALENDAR_WINDOW_AHEAD_DAYS:-90}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 30s
+      timeout: 5s
+      start_period: 20s
+      retries: 3
     volumes:
       # Only used for the SQLite default; mount is harmless when using PostgreSQL
       - registry-data:/app/data

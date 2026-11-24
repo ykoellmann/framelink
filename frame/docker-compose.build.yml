@@ -1,0 +1,5 @@
+# Local build instead of pulling: docker compose -f docker-compose.yml -f docker-compose.build.yml up --build
+# Only `display` builds; webui and sync share its image tag, so it is built once.
+services:
+  display:
+    build: .

@@ -1,0 +1,49 @@
+name: Release
+
+# A tag like v1.2.3 creates a GitHub release with the frame installer, which fetches exactly these assets:
+#   install.sh              the one-line installer (curl .../releases/latest/download/install.sh | sudo bash)
+#   framelink-frame.tar.gz  framelink-frame/{install.sh, systemd/, config.yaml.example, framelink_frame-<v>-py3-none-any.whl}
+#   the wheel itself
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - name: Version from tag
+        # pyproject.toml in the repo stays 0.1.0; only this CI checkout is changed
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          sed -i "s/^version = .*/version = \"$VERSION\"/" frame/pyproject.toml registry/pyproject.toml
+          grep -H '^version' frame/pyproject.toml registry/pyproject.toml
+      - name: Build the frame wheel
+        run: |
+          pip install build
+          python -m build --wheel frame --outdir dist
+          unzip -l dist/*.whl | grep -q 'sidebar/assets/fonts/Inter-Regular.ttf'   # fonts must be inside
+      - name: Package the release archive
+        run: |
+          mkdir -p stage/framelink-frame
+          cp frame/install.sh frame/config.yaml.example stage/framelink-frame/
+          cp -r frame/systemd stage/framelink-frame/
+          cp dist/*.whl stage/framelink-frame/
+          tar -czf framelink-frame.tar.gz -C stage framelink-frame
+      - name: Create the release
+        uses: softprops/action-gh-release@v3
+        with:
+          generate_release_notes: true
+          # a tag with a suffix (v1.2.3-rc1) is a pre-release and does not become "latest"
+          prerelease: ${{ contains(github.ref_name, '-') }}
+          files: |
+            frame/install.sh
+            framelink-frame.tar.gz
+            dist/*.whl

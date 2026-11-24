@@ -1,0 +1,58 @@
+name: CI
+
+# Runs on pull requests, and is called by docker.yml before images are published (pushes to main, tags).
+on:
+  pull_request:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  tests:
+    name: Tests (${{ matrix.package }}, Python ${{ matrix.python }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        package: [registry, frame]
+        python: ["3.11", "3.12"]
+    defaults:
+      run:
+        working-directory: ${{ matrix.package }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: ${{ matrix.python }}
+          cache: pip
+          cache-dependency-path: ${{ matrix.package }}/pyproject.toml
+      - name: Install
+        # the frame tests also cover the web UI; pygame is not needed (the display imports it lazily)
+        run: pip install -e ".[dev]" ${{ matrix.package == 'frame' && 'flask' || '' }}
+      - name: Test
+        run: pytest
+
+  docker-build:
+    name: Docker build (${{ matrix.image }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - image: registry
+            smoke: python -c "import framelink_registry"
+          - image: frame
+            smoke: framelink-bench --help
+    steps:
+      - uses: actions/checkout@v7
+      - uses: docker/setup-buildx-action@v4
+      - name: Build (amd64 only, no push)
+        uses: docker/build-push-action@v7
+        with:
+          context: ${{ matrix.image }}
+          load: true
+          tags: framelink-${{ matrix.image }}:ci
+          cache-from: type=gha,scope=${{ matrix.image }}
+      - name: Smoke test
+        run: docker run --rm framelink-${{ matrix.image }}:ci ${{ matrix.smoke }}
